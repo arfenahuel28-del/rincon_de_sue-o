@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Reemplazar TU-DOMINIO por el dominio real antes de publicar. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://TU-DOMINIO/</loc></url>
+  <url><loc>https://TU-DOMINIO/productos.html</loc></url>
+  <url><loc>https://TU-DOMINIO/lubricentro.html</loc></url>
+  <url><loc>https://TU-DOMINIO/contacto.html</loc></url>
+</urlset>

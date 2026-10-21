@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /carrito.html
+Disallow: /checkout.html
+Disallow: /pedido.html
+Disallow: /admin.html
+
+# Reemplazar TU-DOMINIO por el dominio real:
+Sitemap: https://TU-DOMINIO/sitemap.xml

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finalizar pedido | BLACK</title>
+  <meta name="description" content="Completá tus datos y confirmá tu pedido.">
+  <meta name="robots" content="noindex,follow">
+  <meta name="theme-color" content="#0b0b0c">
+  <link rel="icon" type="image/png" href="assets/logo/favicon.png">
+  <link rel="apple-touch-icon" href="assets/logo/apple-touch-icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="es_AR">
+  <meta property="og:title" content="Finalizar pedido | BLACK">
+  <meta property="og:description" content="Completá tus datos y confirmá tu pedido.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/config.js" defer></script>
+  <script src="js/products-data.js" defer></script>
+  <script src="js/store.js" defer></script>
+  <script src="js/layout.js" defer></script>
+  <script src="js/script.js" defer></script>
+</head>
+<body data-page="checkout">
+  <a class="skip-link" href="#contenido">Ir al contenido</a>
+  <header class="site-header" id="site-header"></header>
+  <main id="contenido">
+    <section class="page-head">
+      <div class="container"><h1>Finalizar pedido</h1></div>
+    </section>
+    <section class="page-body" aria-label="Datos del pedido">
+      <div class="container">
+        <div class="empty empty-lg" id="checkout-empty" hidden>
+          <h2>No hay productos para pedir</h2>
+          <p>Tu carrito está vacío.</p>
+          <a class="btn btn-red btn-lg" href="productos.html">Ver productos</a>
+        </div>
+
+        <div class="checkout-grid" id="checkout-wrap">
+          <form id="checkout-form" novalidate autocomplete="on">
+            <div class="form-card">
+              <h2>Tus datos</h2>
+              <div class="field">
+                <label for="f-name">Nombre y apellido</label>
+                <input id="f-name" name="name" type="text" autocomplete="name" aria-describedby="err-name" required>
+                <p class="field-error" id="err-name"></p>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="f-phone">Teléfono</label>
+                  <input id="f-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Ej: 358 123 4567" aria-describedby="err-phone" required>
+                  <p class="field-error" id="err-phone"></p>
+                </div>
+                <div class="field">
+                  <label for="f-email">Email</label>
+                  <input id="f-email" name="email" type="email" inputmode="email" autocomplete="email" aria-describedby="err-email" required>
+                  <p class="field-error" id="err-email"></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-card">
+              <h2>Entrega</h2>
+              <div class="choices" id="delivery-options" role="radiogroup" aria-label="Método de entrega"></div>
+              <div class="field" id="address-field" hidden style="margin-top:14px">
+                <label for="f-address">Dirección de entrega</label>
+                <input id="f-address" name="address" type="text" autocomplete="street-address" placeholder="Calle, número y barrio" aria-describedby="err-address">
+                <p class="field-error" id="err-address"></p>
+              </div>
+              <div class="field" style="margin:14px 0 0">
+                <label for="f-notes">Observaciones <span class="opt">(opcional)</span></label>
+                <textarea id="f-notes" name="notes" rows="2" autocomplete="off"></textarea>
+              </div>
+            </div>
+
+            <div class="form-card">
+              <h2>Pago</h2>
+              <p class="pay-note" id="payment-note"></p>
+            </div>
+            <p class="form-error" id="form-error" role="alert"></p>
+          </form>
+
+          <aside class="card checkout-aside" aria-label="Tu pedido">
+            <h2>Tu pedido</h2>
+            <div id="order-summary"></div>
+            <button class="btn btn-red btn-lg btn-block" type="submit" form="checkout-form">Confirmar pedido</button>
+            <p class="fine" style="margin:12px 0 0"><a href="carrito.html">Volver al carrito</a></p>
+          </aside>
+        </div>
+      </div>
+    </section>
+    <div class="sticky-bar" id="sticky-bar"></div>
+  </main>
+  <footer class="site-footer" id="site-footer"></footer>
+</body>
+</html>
