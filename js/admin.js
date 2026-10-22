@@ -1,6 +1,6 @@
 /* ==========================================================
-   BLACK – panel de administración (Supabase)
-   Login real (Supabase Auth), productos, fotos (Storage) y pedidos.
+   RINCÓN DE SUEÑO – panel de administración (Supabase)
+   Login real (Supabase Auth), productos, categorías, fotos (Storage) y pedidos.
    Solo entran usuarios que estén en la tabla admin_users.
    ========================================================== */
 (function () {
@@ -82,6 +82,7 @@
     }
     showApp(true);
     renderProducts();
+    renderCategories();
     renderOrders();
   }
 
@@ -112,7 +113,7 @@
   });
 
   /* ---------- Pestañas ---------- */
-  const tabs = { productos: $('#tab-productos'), pedidos: $('#tab-pedidos') };
+  const tabs = { productos: $('#tab-productos'), categorias: $('#tab-categorias'), pedidos: $('#tab-pedidos') };
   async function selectTab(name) {
     Object.entries(tabs).forEach(([k, el]) => {
       const on = k === name;
@@ -122,6 +123,7 @@
     });
     try {
       if (name === 'pedidos') { await loadOrders(); renderOrders(); }
+      else if (name === 'categorias') { await Promise.all([loadCategories(), loadProducts()]); renderCategories(); }
       else { await loadProducts(); renderProducts(); }
     } catch (e) { /* se queda con lo que ya está en pantalla */ }
   }
@@ -134,7 +136,7 @@
   const search = $('#prod-search');
 
   function thumb(p) {
-    const art = p.art || { shape: 'bottle', color: '#e11d2e' };
+    const art = p.art || { shape: 'folded', color: '#b9a3b0' };
     return `<div class="c-thumb"><svg class="p-art" style="--c:${esc(art.color)}" aria-hidden="true" focusable="false"><use href="#p-${esc(art.shape)}"/></svg>${p.image ? `<img class="p-photo" src="${esc(p.image)}" alt="">` : ''}</div>`;
   }
 
@@ -193,7 +195,7 @@
   let imageData = '';   // URL existente, o data: URL si se eligió una foto nueva
 
   function showPreview() {
-    const p = { art: (editing && editing.art) || { shape: 'bottle', color: '#e11d2e' }, image: imageData };
+    const p = { art: (editing && editing.art) || { shape: 'folded', color: '#b9a3b0' }, image: imageData };
     $('#p-preview').innerHTML = thumb(p).replace(/^<div class="c-thumb">|<\/div>$/g, '');
     $('#p-img-remove').hidden = !imageData;
   }
@@ -212,7 +214,7 @@
     form.elements.active.checked = p ? p.active !== false : true;
     ['name', 'price', 'stock'].forEach((k) => { $('#p-err-' + k).textContent = ''; form.elements[k].removeAttribute('aria-invalid'); });
     $('#p-form-error').textContent = '';
-    $('#p-img-msg').textContent = 'Sin foto se muestra un envase genérico.';
+    $('#p-img-msg').textContent = 'Sin foto se muestra un dibujo genérico.';
     $('#p-file').value = '';
     showPreview();
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
@@ -304,6 +306,10 @@
       if (errs[k]) { form.elements[k].setAttribute('aria-invalid', 'true'); first = first || form.elements[k]; } else form.elements[k].removeAttribute('aria-invalid');
     });
     if (first) { first.focus(); return; }
+    if (!form.elements.category.value) {
+      $('#p-form-error').textContent = 'Primero creá una categoría en la pestaña "Categorías".';
+      return;
+    }
 
     const submitBtn = form.querySelector('button[type="submit"]');
     saving = true; submitBtn.disabled = true;
@@ -324,7 +330,7 @@
         featured: form.elements.featured.checked,
         active: form.elements.active.checked,
         image_url: imageUrl || null,
-        art: (editing && editing.art) || { shape: 'bottle', color: '#e11d2e' },
+        art: (editing && editing.art) || { shape: 'folded', color: '#b9a3b0' },
       };
       const { error } = await sb.from('products').upsert(row);
       if (error) throw error;
@@ -336,6 +342,165 @@
       $('#p-form-error').textContent = 'No se pudo guardar. Revisá la conexión e intentá de nuevo.';
     } finally {
       saving = false; submitBtn.disabled = false;
+    }
+  });
+
+  /* ==========================================================
+     CATEGORÍAS (crear, editar, ordenar y eliminar)
+     Las categorías organizan los productos en la tienda: el cliente
+     las ve en el inicio y como filtros en la página de productos.
+     ========================================================== */
+  const CAT_ICONS = [
+    ['bed', 'Cama'], ['quilt', 'Acolchado'], ['pillow', 'Almohada'], ['towel', 'Toalla'],
+    ['curtain', 'Cortina'], ['table', 'Mesa'], ['moon', 'Descanso'], ['tag', 'Oferta'],
+    ['heart', 'Regalos'], ['spark', 'Novedades'], ['bag', 'Bolsa'], ['shield', 'Calidad'], ['dots', 'Otros'],
+  ];
+  const CAT_ICON_DEFAULT = 'tag';
+  const catList = $('#cat-list');
+  const catDlg = $('#cat-dialog');
+  const catForm = $('#cat-form');
+  let editingCat = null;
+  let savingCat = false;
+
+  $('#c-icons').innerHTML = CAT_ICONS.map(([v, label]) => `
+    <label class="icon-choice">
+      <input type="radio" name="icon" value="${v}">
+      <span class="icon-choice-box"><svg class="ico ico-lg" aria-hidden="true"><use href="#i-${v}"/></svg><small>${label}</small></span>
+    </label>`).join('');
+
+  const countIn = (id) => products.filter((p) => p.category === id).length;
+  const catSlug = (s) => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'categoria';
+  function uniqueCatId(name) {
+    const base = catSlug(name);
+    let id = base; let n = 2;
+    while (categories.some((c) => c.id === id)) { id = `${base}-${n++}`; }
+    return id;
+  }
+
+  function renderCategories() {
+    $('#cat-count').textContent = categories.length === 1 ? '1 categoría' : `${categories.length} categorías`;
+    if (!categories.length) {
+      catList.innerHTML = '<div class="empty empty-lg"><h2>Todavía no hay categorías</h2><p>Creá la primera con el botón "+ Nueva categoría".</p></div>';
+      return;
+    }
+    catList.innerHTML = categories.map((c, i) => {
+      const n = countIn(c.id);
+      return `
+      <article class="adm-item adm-cat">
+        <span class="adm-cat-ico"><svg class="ico ico-lg" aria-hidden="true"><use href="#i-${esc(c.icon || CAT_ICON_DEFAULT)}"/></svg></span>
+        <div class="adm-main-info">
+          <p class="adm-name">${esc(c.name)}</p>
+          <p class="adm-sub">${n === 1 ? '1 producto' : `${n} productos`}</p>
+        </div>
+        <div class="adm-row-actions adm-cat-actions">
+          <button class="btn btn-line btn-move" type="button" data-up="${esc(c.id)}" aria-label="Subir ${esc(c.name)}"${i === 0 ? ' disabled' : ''}>↑</button>
+          <button class="btn btn-line btn-move" type="button" data-down="${esc(c.id)}" aria-label="Bajar ${esc(c.name)}"${i === categories.length - 1 ? ' disabled' : ''}>↓</button>
+          <button class="btn btn-line" type="button" data-edit-cat="${esc(c.id)}">Editar</button>
+          <button class="btn btn-line adm-del" type="button" data-del-cat="${esc(c.id)}" aria-label="Eliminar ${esc(c.name)}">Eliminar</button>
+        </div>
+      </article>`;
+    }).join('');
+  }
+
+  async function moveCategory(id, dir) {
+    const i = categories.findIndex((c) => c.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= categories.length) return;
+    const next = categories.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    // Se numera todo de 1 en adelante: así también se arreglan órdenes repetidos.
+    const changes = next.map((c, idx) => ({ c, order: idx + 1 })).filter(({ c, order }) => c.sort_order !== order);
+    try {
+      const results = await Promise.all(changes.map(({ c, order }) => sb.from('categories').update({ sort_order: order }).eq('id', c.id)));
+      const failed = results.find((r) => r.error);
+      if (failed) throw failed.error;
+    } catch (err) {
+      window.alert('No se pudo cambiar el orden. Intentá de nuevo.');
+    }
+    try { await loadCategories(); } catch (e) { /* se queda con lo que hay */ }
+    renderCategories();
+    const sel = (dir < 0 ? '[data-up="' : '[data-down="') + id + '"]';
+    const other = (dir < 0 ? '[data-down="' : '[data-up="') + id + '"]';
+    const btn = catList.querySelector(sel + ':not([disabled])') || catList.querySelector(other + ':not([disabled])');
+    if (btn) btn.focus();
+  }
+
+  async function deleteCategory(id) {
+    const c = categories.find((x) => x.id === id);
+    if (!c) return;
+    const n = countIn(c.id);
+    if (n > 0) {
+      window.alert(`No se puede eliminar "${c.name}" porque tiene ${n} ${n === 1 ? 'producto' : 'productos'}. Pasalos a otra categoría y volvé a intentar.`);
+      return;
+    }
+    if (!window.confirm(`¿Eliminar la categoría "${c.name}"? Esta acción no se puede deshacer.`)) return;
+    const { error } = await sb.from('categories').delete().eq('id', c.id);
+    if (error) { window.alert('No se pudo eliminar la categoría. Intentá de nuevo.'); return; }
+    try { await loadCategories(); } catch (e) { categories = categories.filter((x) => x.id !== c.id); }
+    renderCategories();
+  }
+
+  catList.addEventListener('click', (e) => {
+    const up = e.target.closest('[data-up]');
+    const down = e.target.closest('[data-down]');
+    const ed = e.target.closest('[data-edit-cat]');
+    const del = e.target.closest('[data-del-cat]');
+    if (up) moveCategory(up.dataset.up, -1);
+    else if (down) moveCategory(down.dataset.down, 1);
+    else if (ed) openCatForm(categories.find((c) => c.id === ed.dataset.editCat));
+    else if (del) deleteCategory(del.dataset.delCat);
+  });
+
+  function openCatForm(c) {
+    editingCat = c || null;
+    $('#cat-dialog-title').textContent = c ? 'Editar categoría' : 'Nueva categoría';
+    $('#c-name').value = c ? c.name : '';
+    const icon = c && CAT_ICONS.some(([v]) => v === c.icon) ? c.icon : CAT_ICON_DEFAULT;
+    catForm.querySelectorAll('input[name="icon"]').forEach((r) => { r.checked = r.value === icon; });
+    $('#c-err-name').textContent = '';
+    $('#c-name').removeAttribute('aria-invalid');
+    $('#c-form-error').textContent = '';
+    if (catDlg.showModal) catDlg.showModal(); else catDlg.setAttribute('open', '');
+    $('#c-name').focus();
+  }
+  const closeCatForm = () => { if (catDlg.close) catDlg.close(); else catDlg.removeAttribute('open'); };
+  $('#new-category').addEventListener('click', () => openCatForm(null));
+  $('#c-cancel').addEventListener('click', closeCatForm);
+
+  catForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (savingCat) return;
+    const nameEl = $('#c-name');
+    const name = nameEl.value.trim();
+    let err = '';
+    if (name.length < 2) err = 'Escribí el nombre de la categoría.';
+    else if (name.length > 60) err = 'El nombre puede tener hasta 60 letras.';
+    else if (categories.some((c) => norm(c.name) === norm(name) && (!editingCat || c.id !== editingCat.id))) err = 'Ya existe una categoría con ese nombre.';
+    $('#c-err-name').textContent = err;
+    if (err) { nameEl.setAttribute('aria-invalid', 'true'); nameEl.focus(); return; }
+    nameEl.removeAttribute('aria-invalid');
+
+    const icon = (catForm.querySelector('input[name="icon"]:checked') || {}).value || CAT_ICON_DEFAULT;
+    const submitBtn = catForm.querySelector('button[type="submit"]');
+    savingCat = true; submitBtn.disabled = true;
+    $('#c-form-error').textContent = '';
+    try {
+      if (editingCat) {
+        const { error } = await sb.from('categories').update({ name, icon }).eq('id', editingCat.id);
+        if (error) throw error;
+      } else {
+        const sortOrder = categories.reduce((m, c) => Math.max(m, c.sort_order || 0), 0) + 1;
+        const { error } = await sb.from('categories').insert({ id: uniqueCatId(name), name, icon, sort_order: sortOrder });
+        if (error) throw error;
+      }
+      closeCatForm();
+      await loadCategories();
+      renderCategories();
+      renderProducts();
+    } catch (err2) {
+      $('#c-form-error').textContent = 'No se pudo guardar. Revisá la conexión e intentá de nuevo.';
+    } finally {
+      savingCat = false; submitBtn.disabled = false;
     }
   });
 

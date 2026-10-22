@@ -1,5 +1,5 @@
 /* ==========================================================
-   BLACK – capa de datos de la tienda
+   RINCÓN DE SUEÑO – capa de datos de la tienda
    Catálogo · Carrito · Pedidos · Pagos
 
    Conectado a Supabase. Si la URL de Supabase no está configurada
@@ -47,7 +47,7 @@
     featured: !!r.featured,
     active: r.active !== false,
     image: r.image_url || '',
-    art: r.art && r.art.shape ? r.art : { shape: 'bottle', color: '#e11d2e' },
+    art: r.art && r.art.shape ? r.art : { shape: 'folded', color: '#b9a3b0' },
   });
 
   /* Estados que maneja el panel de administración */
@@ -268,7 +268,7 @@
     if (t && t.classList && t.classList.contains('brand-logo')) {
       const span = document.createElement('span');
       span.className = 'brand-text';
-      span.textContent = 'BLACK';
+      span.textContent = 'Rincón de Sueño';
       t.replaceWith(span);
     }
   }, true);

@@ -1,27 +1,60 @@
+-- ==========================================================
+-- RINCÓN DE SUEÑO – datos de ejemplo (blanquería)
+-- Se ejecuta en Supabase: SQL Editor → New query → pegar todo → Run.
+--
+-- ⚠️⚠️ ATENCIÓN: ESTE ARCHIVO BORRA DATOS ⚠️⚠️
+-- Las dos primeras instrucciones (DELETE) ELIMINAN todos los productos
+-- de las categorías del lubricentro (Detailing, Limpieza, Ceras, Accesorios,
+-- Lubricantes, Filtros, Mantenimiento, Otros) y esas categorías.
+-- Los pedidos que ya existan NO se tocan.
+-- Si no querés borrar nada, borrá las dos instrucciones DELETE de abajo.
+--
+-- Después carga las categorías y los productos de ejemplo de la blanquería.
+-- Se puede volver a correr, pero pisaría el nombre, precio y stock de los
+-- productos de ejemplo: no lo corras otra vez cuando ya cargaste los tuyos.
+-- Orden en un proyecto nuevo: schema.sql → seed.sql → admin-user.sql
+-- ==========================================================
+
+-- 1) BORRA los productos de ejemplo del lubricentro
+delete from public.products
+where category_id in ('detailing', 'limpieza-exterior', 'limpieza-interior', 'ceras-abrillantadores', 'accesorios', 'lubricantes', 'filtros', 'mantenimiento', 'otros');
+
+-- 2) BORRA las categorías de ejemplo del lubricentro
+delete from public.categories
+where id in ('detailing', 'limpieza-exterior', 'limpieza-interior', 'ceras-abrillantadores', 'accesorios', 'lubricantes', 'filtros', 'mantenimiento', 'otros');
+
+-- 3) Categorías de la blanquería
 insert into public.categories (id, name, icon, sort_order) values
-('detailing','Detailing','spark',1),('limpieza-exterior','Limpieza exterior','car',2),('limpieza-interior','Limpieza interior','seat',3),('ceras-abrillantadores','Ceras y abrillantadores','shield',4),('accesorios','Accesorios','bag',5),('lubricantes','Lubricantes','drop',6),('filtros','Filtros','filter',7),('mantenimiento','Productos para mantenimiento','wrench',8),('otros','Otros','dots',9)
+('sabanas','Sábanas','bed',1),
+('acolchados-edredones','Acolchados y edredones','quilt',2),
+('almohadas','Almohadas','pillow',3),
+('toallas-toallones','Toallas y toallones','towel',4),
+('cortinas','Cortinas','curtain',5),
+('manteleria','Mantelería','table',6),
+('infantil','Infantil','moon',7),
+('ofertas','Ofertas','tag',8)
 on conflict (id) do update set name = excluded.name, icon = excluded.icon, sort_order = excluded.sort_order;
 
+-- 4) Productos de ejemplo (precios en pesos argentinos, solo de muestra)
 insert into public.products (id,name,description,price,stock,category_id,featured,image_url,art) values
-('shampoo-neutro','Shampoo neutro','Limpieza profunda y segura para la pintura.',5800,24,'limpieza-exterior',true,null,'{"shape":"bottle","color":"#2f9e5b"}'),
-('limpia-llantas','Limpia llantas','Elimina el polvo de frenos y realza el brillo.',6500,12,'limpieza-exterior',false,null,'{"shape":"spray","color":"#cfd6dc"}'),
-('limpia-vidrios','Limpia vidrios','Cristales sin vetas ni marcas.',4300,18,'limpieza-exterior',false,null,'{"shape":"spray","color":"#1fa6b8"}'),
-('limpiador-interiores','Limpiador de interiores','Renueva y protege tapizados y plásticos.',7200,15,'limpieza-interior',true,null,'{"shape":"bottle","color":"#6fbf2a"}'),
-('renovador-tablero','Renovador de tablero','Acabado mate y protección contra el sol.',6900,3,'limpieza-interior',false,null,'{"shape":"spray","color":"#e8a317"}'),
-('cera-liquida','Cera líquida','Brillo y protección por más tiempo.',8900,10,'ceras-abrillantadores',true,null,'{"shape":"bottle","color":"#e11d2e"}'),
-('cera-pasta','Cera en pasta','Protección intensa para la pintura.',12500,0,'ceras-abrillantadores',false,null,'{"shape":"tin","color":"#e8a317"}'),
-('abrillantador-neumaticos','Abrillantador de neumáticos','Negro profundo y protección.',6800,14,'detailing',true,null,'{"shape":"bottle","color":"#e8a317"}'),
-('kit-lavado','Kit de lavado completo','Shampoo, esponja y paño de microfibra.',28900,6,'detailing',true,null,'{"shape":"box","color":"#e11d2e"}'),
-('arcilla-descontaminante','Arcilla descontaminante','Quita impurezas adheridas a la pintura.',15800,4,'detailing',false,null,'{"shape":"tin","color":"#1fa6b8"}'),
-('microfibra-x3','Paños de microfibra x3','Suaves, absorbentes y sin pelusa.',4200,40,'accesorios',true,null,'{"shape":"cloth","color":"#e11d2e"}'),
-('aromatizante','Aromatizante','Fragancia duradera para tu auto.',3900,30,'accesorios',false,null,'{"shape":"spray","color":"#1fa6b8"}'),
-('aceite-5w30','Aceite 5W-30 sintético 4 L','Protección y rendimiento para el motor.',38500,8,'lubricantes',true,null,'{"shape":"jug","color":"#e11d2e"}'),
-('aceite-10w40','Aceite 10W-40 semisintético 4 L','Uso diario, motores nafteros y diésel.',32000,6,'lubricantes',false,null,'{"shape":"jug","color":"#e8a317"}'),
-('aceite-15w40','Aceite 15W-40 mineral 4 L','Lubricación económica para uso general.',29000,5,'lubricantes',false,null,'{"shape":"jug","color":"#2f6fd1"}'),
-('filtro-aceite','Filtro de aceite','Retiene impurezas y cuida el motor.',5200,20,'filtros',true,null,'{"shape":"filter","color":"#e11d2e"}'),
-('filtro-aire','Filtro de aire','Mejor respiración y menor consumo.',6800,11,'filtros',false,null,'{"shape":"filter","color":"#e8a317"}'),
-('refrigerante','Refrigerante 1 L','Protege el motor del sobrecalentamiento.',9800,13,'mantenimiento',false,null,'{"shape":"jug","color":"#1fa6b8"}'),
-('aditivo-combustible','Aditivo para combustible','Limpia inyectores y mejora el rendimiento.',4900,17,'mantenimiento',false,null,'{"shape":"bottle","color":"#2f6fd1"}'),
-('desengrasante-motor','Desengrasante de motor','Remueve grasa y suciedad del vano motor.',7400,9,'mantenimiento',false,null,'{"shape":"spray","color":"#e8a317"}'),
-('escobillas-limpiaparabrisas','Escobillas limpiaparabrisas (par)','Barrido silencioso y sin marcas.',9500,7,'otros',false,null,'{"shape":"box","color":"#2a323a"}')
+('sabanas-algodon-2p','Juego de sábanas algodón 2 plazas','Algodón peinado, suave y fresco. Incluye 4 piezas.',48900,12,'sabanas',true,null,'{"shape":"folded","color":"#b8c4b0"}'),
+('sabanas-percal-queen','Juego de sábanas percal Queen','Percal de 200 hilos, tacto liso y duradero.',62500,8,'sabanas',true,null,'{"shape":"folded","color":"#d9c3c8"}'),
+('sabanas-franela-1p5','Sábanas de franela 1 plaza y media','Cálidas y abrigadas para el invierno.',35800,5,'sabanas',false,null,'{"shape":"folded","color":"#c9a98f"}'),
+('acolchado-reversible','Acolchado reversible 2 plazas','Liviano y abrigado, dos diseños en uno.',89900,7,'acolchados-edredones',true,null,'{"shape":"quilt","color":"#b9a3b0"}'),
+('edredon-simil-plumon','Edredón símil plumón Queen','Relleno de microfibra siliconada, muy mullido.',124500,4,'acolchados-edredones',true,null,'{"shape":"quilt","color":"#d8cfc0"}'),
+('manta-polar-2p','Manta polar 2 plazas','Suave, liviana y de secado rápido.',29900,0,'acolchados-edredones',false,null,'{"shape":"quilt","color":"#8a97ad"}'),
+('almohada-fibra','Almohada de fibra','Firmeza media, ideal para dormir de costado.',12900,25,'almohadas',true,null,'{"shape":"pillow","color":"#cdbfae"}'),
+('almohada-viscoelastica','Almohada viscoelástica','Se adapta al cuello y mantiene su forma.',24800,3,'almohadas',false,null,'{"shape":"pillow","color":"#a9b8c9"}'),
+('almohada-simil-plumon','Almohada símil plumón','Suave y esponjosa, con funda de algodón.',17500,14,'almohadas',false,null,'{"shape":"pillow","color":"#d9c3c8"}'),
+('toalla-bano','Toalla de baño 100% algodón','Gruesa y muy absorbente, 70 x 140 cm.',14900,30,'toallas-toallones',true,null,'{"shape":"towel","color":"#9fb3a6"}'),
+('toallon-playa-rayado','Toallón de playa rayado','Liviano y de secado rápido, 90 x 170 cm.',18700,16,'toallas-toallones',false,null,'{"shape":"towel","color":"#d9a58b"}'),
+('set-toallas-3','Set de 3 toallas (cuerpo, mano y rostro)','Combinadas en un mismo color, listas para regalar.',27900,10,'toallas-toallones',true,null,'{"shape":"gift","color":"#b9a3b0"}'),
+('cortina-blackout','Cortina blackout 1,40 x 2,10 m','Bloquea la luz y ayuda a mantener la temperatura.',32500,8,'cortinas',true,null,'{"shape":"curtain","color":"#8a97ad"}'),
+('cortina-voile-2-panos','Cortina voile 2 paños','Tela liviana que deja pasar la luz suave.',19800,11,'cortinas',false,null,'{"shape":"curtain","color":"#d8cfc0"}'),
+('mantel-antimanchas','Mantel rectangular antimanchas','Resistente y fácil de lavar, para 6 personas.',17900,12,'manteleria',false,null,'{"shape":"cloth","color":"#c9a98f"}'),
+('repasadores-x3','Repasadores de algodón x3','Absorbentes, con diseño a rayas.',8900,28,'manteleria',false,null,'{"shape":"cloth","color":"#9fb3a6"}'),
+('sabanas-infantiles-1p','Sábanas infantiles estampadas 1 plaza','Estampas suaves, mezcla de algodón y poliéster.',29500,9,'infantil',false,null,'{"shape":"folded","color":"#a9b8c9"}'),
+('toalla-capucha-bebe','Toalla con capucha para bebé','Algodón suave con orejitas.',15500,13,'infantil',false,null,'{"shape":"towel","color":"#e0b8c0"}'),
+('oferta-sabanas-2p','Sábanas 2 plazas · oferta','Último pack de la temporada.',31900,6,'ofertas',false,null,'{"shape":"folded","color":"#d9a58b"}'),
+('oferta-pack-almohadas','Pack 2 almohadas de fibra','Dos almohadas al precio promocional.',21500,10,'ofertas',false,null,'{"shape":"pillow","color":"#cdbfae"}')
 on conflict (id) do update set name = excluded.name, description = excluded.description, price = excluded.price, stock = excluded.stock, category_id = excluded.category_id, featured = excluded.featured, art = excluded.art;

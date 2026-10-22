@@ -1,19 +1,19 @@
 /* ==========================================================
-   BLACK – configuración de la tienda
+   RINCÓN DE SUEÑO – configuración de la tienda
    Todo lo que cambia entre "demo" y "producción" está acá.
    ========================================================== */
 window.BLACK_CONFIG = {
   business: {
-    name: 'BLACK Lubricentro y Cosmética Vehicular',
-    // ⚠️ Datos de ejemplo: reemplazar por los reales.
-    phone: '+54 9 358 123 4567',
-    whatsapp: '5493581234567',          // formato internacional, sin + ni espacios
-    instagram: 'black.lubricentro',
-    address: 'Av. San Martín 1234',
-    city: 'Río Cuarto, Córdoba',
-    hours: [
-      ['Lunes a viernes', '8:00 – 20:00'],
-      ['Sábados', '8:00 – 14:00'],
+    name: 'Rincón de Sueño Blanquería',
+    // ⚠️ REEMPLAZAR: datos de ejemplo. Cargá los reales antes de publicar.
+    phone: '+54 9 000 000 0000',                  // REEMPLAZAR
+    whatsapp: '5490000000000',                    // REEMPLAZAR (formato internacional, sin + ni espacios)
+    instagram: 'rincondesueno.blanqueria',        // REEMPLAZAR
+    address: 'Calle y número (REEMPLAZAR)',       // REEMPLAZAR
+    city: 'Ciudad, Provincia (REEMPLAZAR)',       // REEMPLAZAR
+    hours: [                                      // REEMPLAZAR
+      ['Lunes a viernes', '9:00 – 13:00 y 16:30 – 20:00'],
+      ['Sábados', '9:00 – 13:00'],
     ],
   },
 

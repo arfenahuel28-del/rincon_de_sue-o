@@ -1,15 +1,16 @@
 /* ==========================================================
-   BLACK – catálogo (DATOS DE DEMOSTRACIÓN)
-   Hoy es la "base de datos" de la tienda. Cuando exista backend, este
-   archivo se reemplaza por la respuesta de GET /api/products y no hace
-   falta tocar el resto del código (ver docs/PREPARACION-BACKEND.md).
+   RINCÓN DE SUEÑO – catálogo (DATOS DE EJEMPLO)
+   Es el catálogo de respaldo: si Supabase responde, la tienda usa el de
+   la base de datos (ver js/store.js). Mantenelo parecido a supabase/seed.sql.
 
-   CATEGORÍAS: agregar, quitar o renombrar libremente. `id` es el que usan
-   los productos y la URL (productos.html?categoria=<id>). `icon` es uno de:
-   spark, car, seat, shield, bag, drop, filter, wrench, dots.
+   CATEGORÍAS: `id` es el que usan los productos y la URL
+   (productos.html?categoria=<id>). `icon` es uno de:
+   bed, quilt, pillow, towel, curtain, table, moon, tag, heart,
+   spark, bag, shield, dots.
+   Desde el panel de administración también se pueden crear y editar.
 
    PRODUCTOS:
-     id          texto único, sin espacios (ej. 'cera-liquida')
+     id          texto único, sin espacios (ej. 'toalla-bano')
      name        nombre
      description descripción corta (1 línea)
      price       precio en pesos, número entero
@@ -18,52 +19,49 @@
      category    id de categoría
      featured    true para mostrarlo en el inicio
      active      false para ocultarlo sin borrarlo
-     image       ruta de la foto, ej. 'assets/products/cera-liquida.jpg'
-                 (si queda vacío o falla, se dibuja un envase)
-     art         dibujo de reemplazo: shape (bottle, spray, jug, tin,
-                 filter, cloth, box) y color de la etiqueta
-   ⚠️ Nombres, precios y stock de abajo son de ejemplo.
+     image       ruta de la foto, ej. 'assets/products/toalla-bano.jpg'
+                 (si queda vacío o falla, se dibuja el producto)
+     art         dibujo de reemplazo: shape (folded, towel, pillow, quilt,
+                 curtain, cloth, gift) y color
+   ⚠️ Nombres, precios y stock de abajo son de EJEMPLO.
    ========================================================== */
 window.BLACK_CATEGORIES = [
-  { id: 'detailing', name: 'Detailing', icon: 'spark' },
-  { id: 'limpieza-exterior', name: 'Limpieza exterior', icon: 'car' },
-  { id: 'limpieza-interior', name: 'Limpieza interior', icon: 'seat' },
-  { id: 'ceras-abrillantadores', name: 'Ceras y abrillantadores', icon: 'shield' },
-  { id: 'accesorios', name: 'Accesorios', icon: 'bag' },
-  { id: 'lubricantes', name: 'Lubricantes', icon: 'drop' },
-  { id: 'filtros', name: 'Filtros', icon: 'filter' },
-  { id: 'mantenimiento', name: 'Productos para mantenimiento', icon: 'wrench' },
-  { id: 'otros', name: 'Otros', icon: 'dots' },
+  { id: 'sabanas', name: 'Sábanas', icon: 'bed' },
+  { id: 'acolchados-edredones', name: 'Acolchados y edredones', icon: 'quilt' },
+  { id: 'almohadas', name: 'Almohadas', icon: 'pillow' },
+  { id: 'toallas-toallones', name: 'Toallas y toallones', icon: 'towel' },
+  { id: 'cortinas', name: 'Cortinas', icon: 'curtain' },
+  { id: 'manteleria', name: 'Mantelería', icon: 'table' },
+  { id: 'infantil', name: 'Infantil', icon: 'moon' },
+  { id: 'ofertas', name: 'Ofertas', icon: 'tag' },
 ];
 
 window.BLACK_PRODUCTS = [
-  { id: 'shampoo-neutro', name: 'Shampoo neutro', description: 'Limpieza profunda y segura para la pintura.', price: 5800, stock: 24, category: 'limpieza-exterior', featured: true, image: '', art: { shape: 'bottle', color: '#2f9e5b' } },
-  { id: 'limpia-llantas', name: 'Limpia llantas', description: 'Elimina el polvo de frenos y realza el brillo.', price: 6500, stock: 12, category: 'limpieza-exterior', image: '', art: { shape: 'spray', color: '#cfd6dc' } },
-  { id: 'limpia-vidrios', name: 'Limpia vidrios', description: 'Cristales sin vetas ni marcas.', price: 4300, stock: 18, category: 'limpieza-exterior', image: '', art: { shape: 'spray', color: '#1fa6b8' } },
+  { id: 'sabanas-algodon-2p', name: 'Juego de sábanas algodón 2 plazas', description: 'Algodón peinado, suave y fresco. Incluye 4 piezas.', price: 48900, stock: 12, category: 'sabanas', featured: true, image: '', art: { shape: 'folded', color: '#b8c4b0' } },
+  { id: 'sabanas-percal-queen', name: 'Juego de sábanas percal Queen', description: 'Percal de 200 hilos, tacto liso y duradero.', price: 62500, stock: 8, category: 'sabanas', featured: true, image: '', art: { shape: 'folded', color: '#d9c3c8' } },
+  { id: 'sabanas-franela-1p5', name: 'Sábanas de franela 1 plaza y media', description: 'Cálidas y abrigadas para el invierno.', price: 35800, stock: 5, category: 'sabanas', image: '', art: { shape: 'folded', color: '#c9a98f' } },
 
-  { id: 'limpiador-interiores', name: 'Limpiador de interiores', description: 'Renueva y protege tapizados y plásticos.', price: 7200, stock: 15, category: 'limpieza-interior', featured: true, image: '', art: { shape: 'bottle', color: '#6fbf2a' } },
-  { id: 'renovador-tablero', name: 'Renovador de tablero', description: 'Acabado mate y protección contra el sol.', price: 6900, stock: 3, category: 'limpieza-interior', image: '', art: { shape: 'spray', color: '#e8a317' } },
+  { id: 'acolchado-reversible', name: 'Acolchado reversible 2 plazas', description: 'Liviano y abrigado, dos diseños en uno.', price: 89900, stock: 7, category: 'acolchados-edredones', featured: true, image: '', art: { shape: 'quilt', color: '#b9a3b0' } },
+  { id: 'edredon-simil-plumon', name: 'Edredón símil plumón Queen', description: 'Relleno de microfibra siliconada, muy mullido.', price: 124500, stock: 4, category: 'acolchados-edredones', featured: true, image: '', art: { shape: 'quilt', color: '#d8cfc0' } },
+  { id: 'manta-polar-2p', name: 'Manta polar 2 plazas', description: 'Suave, liviana y de secado rápido.', price: 29900, stock: 0, category: 'acolchados-edredones', image: '', art: { shape: 'quilt', color: '#8a97ad' } },
 
-  { id: 'cera-liquida', name: 'Cera líquida', description: 'Brillo y protección por más tiempo.', price: 8900, stock: 10, category: 'ceras-abrillantadores', featured: true, image: '', art: { shape: 'bottle', color: '#e11d2e' } },
-  { id: 'cera-pasta', name: 'Cera en pasta', description: 'Protección intensa para la pintura.', price: 12500, stock: 0, category: 'ceras-abrillantadores', image: '', art: { shape: 'tin', color: '#e8a317' } },
+  { id: 'almohada-fibra', name: 'Almohada de fibra', description: 'Firmeza media, ideal para dormir de costado.', price: 12900, stock: 25, category: 'almohadas', featured: true, image: '', art: { shape: 'pillow', color: '#cdbfae' } },
+  { id: 'almohada-viscoelastica', name: 'Almohada viscoelástica', description: 'Se adapta al cuello y mantiene su forma.', price: 24800, stock: 3, category: 'almohadas', image: '', art: { shape: 'pillow', color: '#a9b8c9' } },
+  { id: 'almohada-simil-plumon', name: 'Almohada símil plumón', description: 'Suave y esponjosa, con funda de algodón.', price: 17500, stock: 14, category: 'almohadas', image: '', art: { shape: 'pillow', color: '#d9c3c8' } },
 
-  { id: 'abrillantador-neumaticos', name: 'Abrillantador de neumáticos', description: 'Negro profundo y protección.', price: 6800, stock: 14, category: 'detailing', featured: true, image: '', art: { shape: 'bottle', color: '#e8a317' } },
-  { id: 'kit-lavado', name: 'Kit de lavado completo', description: 'Shampoo, esponja y paño de microfibra.', price: 28900, stock: 6, category: 'detailing', featured: true, image: '', art: { shape: 'box', color: '#e11d2e' } },
-  { id: 'arcilla-descontaminante', name: 'Arcilla descontaminante', description: 'Quita impurezas adheridas a la pintura.', price: 15800, stock: 4, category: 'detailing', image: '', art: { shape: 'tin', color: '#1fa6b8' } },
+  { id: 'toalla-bano', name: 'Toalla de baño 100% algodón', description: 'Gruesa y muy absorbente, 70 x 140 cm.', price: 14900, stock: 30, category: 'toallas-toallones', featured: true, image: '', art: { shape: 'towel', color: '#9fb3a6' } },
+  { id: 'toallon-playa-rayado', name: 'Toallón de playa rayado', description: 'Liviano y de secado rápido, 90 x 170 cm.', price: 18700, stock: 16, category: 'toallas-toallones', image: '', art: { shape: 'towel', color: '#d9a58b' } },
+  { id: 'set-toallas-3', name: 'Set de 3 toallas (cuerpo, mano y rostro)', description: 'Combinadas en un mismo color, listas para regalar.', price: 27900, stock: 10, category: 'toallas-toallones', featured: true, image: '', art: { shape: 'gift', color: '#b9a3b0' } },
 
-  { id: 'microfibra-x3', name: 'Paños de microfibra x3', description: 'Suaves, absorbentes y sin pelusa.', price: 4200, stock: 40, category: 'accesorios', featured: true, image: '', art: { shape: 'cloth', color: '#e11d2e' } },
-  { id: 'aromatizante', name: 'Aromatizante', description: 'Fragancia duradera para tu auto.', price: 3900, stock: 30, category: 'accesorios', image: '', art: { shape: 'spray', color: '#1fa6b8' } },
+  { id: 'cortina-blackout', name: 'Cortina blackout 1,40 x 2,10 m', description: 'Bloquea la luz y ayuda a mantener la temperatura.', price: 32500, stock: 8, category: 'cortinas', featured: true, image: '', art: { shape: 'curtain', color: '#8a97ad' } },
+  { id: 'cortina-voile-2-panos', name: 'Cortina voile 2 paños', description: 'Tela liviana que deja pasar la luz suave.', price: 19800, stock: 11, category: 'cortinas', image: '', art: { shape: 'curtain', color: '#d8cfc0' } },
 
-  { id: 'aceite-5w30', name: 'Aceite 5W-30 sintético 4 L', description: 'Protección y rendimiento para el motor.', price: 38500, stock: 8, category: 'lubricantes', featured: true, image: '', art: { shape: 'jug', color: '#e11d2e' } },
-  { id: 'aceite-10w40', name: 'Aceite 10W-40 semisintético 4 L', description: 'Uso diario, motores nafteros y diésel.', price: 32000, stock: 6, category: 'lubricantes', image: '', art: { shape: 'jug', color: '#e8a317' } },
-  { id: 'aceite-15w40', name: 'Aceite 15W-40 mineral 4 L', description: 'Lubricación económica para uso general.', price: 29000, stock: 5, category: 'lubricantes', image: '', art: { shape: 'jug', color: '#2f6fd1' } },
+  { id: 'mantel-antimanchas', name: 'Mantel rectangular antimanchas', description: 'Resistente y fácil de lavar, para 6 personas.', price: 17900, stock: 12, category: 'manteleria', image: '', art: { shape: 'cloth', color: '#c9a98f' } },
+  { id: 'repasadores-x3', name: 'Repasadores de algodón x3', description: 'Absorbentes, con diseño a rayas.', price: 8900, stock: 28, category: 'manteleria', image: '', art: { shape: 'cloth', color: '#9fb3a6' } },
 
-  { id: 'filtro-aceite', name: 'Filtro de aceite', description: 'Retiene impurezas y cuida el motor.', price: 5200, stock: 20, category: 'filtros', featured: true, image: '', art: { shape: 'filter', color: '#e11d2e' } },
-  { id: 'filtro-aire', name: 'Filtro de aire', description: 'Mejor respiración y menor consumo.', price: 6800, stock: 11, category: 'filtros', image: '', art: { shape: 'filter', color: '#e8a317' } },
+  { id: 'sabanas-infantiles-1p', name: 'Sábanas infantiles estampadas 1 plaza', description: 'Estampas suaves, mezcla de algodón y poliéster.', price: 29500, stock: 9, category: 'infantil', image: '', art: { shape: 'folded', color: '#a9b8c9' } },
+  { id: 'toalla-capucha-bebe', name: 'Toalla con capucha para bebé', description: 'Algodón suave con orejitas.', price: 15500, stock: 13, category: 'infantil', image: '', art: { shape: 'towel', color: '#e0b8c0' } },
 
-  { id: 'refrigerante', name: 'Refrigerante 1 L', description: 'Protege el motor del sobrecalentamiento.', price: 9800, stock: 13, category: 'mantenimiento', image: '', art: { shape: 'jug', color: '#1fa6b8' } },
-  { id: 'aditivo-combustible', name: 'Aditivo para combustible', description: 'Limpia inyectores y mejora el rendimiento.', price: 4900, stock: 17, category: 'mantenimiento', image: '', art: { shape: 'bottle', color: '#2f6fd1' } },
-  { id: 'desengrasante-motor', name: 'Desengrasante de motor', description: 'Remueve grasa y suciedad del vano motor.', price: 7400, stock: 9, category: 'mantenimiento', image: '', art: { shape: 'spray', color: '#e8a317' } },
-
-  { id: 'escobillas-limpiaparabrisas', name: 'Escobillas limpiaparabrisas (par)', description: 'Barrido silencioso y sin marcas.', price: 9500, stock: 7, category: 'otros', image: '', art: { shape: 'box', color: '#2a323a' } },
+  { id: 'oferta-sabanas-2p', name: 'Sábanas 2 plazas · oferta', description: 'Último pack de la temporada.', price: 31900, stock: 6, category: 'ofertas', image: '', art: { shape: 'folded', color: '#d9a58b' } },
+  { id: 'oferta-pack-almohadas', name: 'Pack 2 almohadas de fibra', description: 'Dos almohadas al precio promocional.', price: 21500, stock: 10, category: 'ofertas', image: '', art: { shape: 'pillow', color: '#cdbfae' } },
 ];

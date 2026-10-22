@@ -1,5 +1,5 @@
 /* ==========================================================
-   BLACK – lógica de cada página
+   RINCÓN DE SUEÑO – lógica de cada página
    (carga después de config.js, products-data.js, store.js, layout.js)
    ========================================================== */
 (function () {
@@ -21,7 +21,7 @@
   }
 
   function mediaHTML(p) {
-    const art = p.art || { shape: 'bottle', color: '#e11d2e' };
+    const art = p.art || { shape: 'folded', color: '#b9a3b0' };
     const drawing = `<svg class="p-art" style="--c:${esc(art.color)}" aria-hidden="true" focusable="false"><use href="#p-${esc(art.shape)}"/></svg>`;
     const photo = p.image ? `<img class="p-photo" src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy" width="400" height="400">` : '';
     return drawing + photo;
@@ -48,7 +48,7 @@
     </article>`;
   }
 
-  /* Imágenes que no cargan: se quita la foto y queda el dibujo del envase */
+  /* Imágenes que no cargan: se quita la foto y queda el dibujo del producto */
   document.addEventListener('error', (e) => {
     if (e.target && e.target.classList && e.target.classList.contains('p-photo')) e.target.remove();
   }, true);
@@ -78,7 +78,9 @@
   function initHome() {
     const cats = $('#home-categories');
     if (cats) {
-      cats.innerHTML = Catalog.categories().map((c) => `
+      /* Solo se muestran las categorías que tienen al menos un producto visible */
+      const withProducts = Catalog.categories().filter((c) => Catalog.products().some((p) => p.category === c.id));
+      cats.innerHTML = withProducts.map((c) => `
         <a class="cat-tile" href="productos.html?categoria=${encodeURIComponent(c.id)}">
           <svg class="ico ico-lg" aria-hidden="true"><use href="#i-${esc(c.icon)}"/></svg>
           <span>${esc(c.name)}</span>
@@ -429,7 +431,7 @@
           <p>Pedido <strong>${esc(order.number)}</strong> · ${esc(when)}</p>
         </div>
       </div>
-      ${order.demo && cfg.demoMode ? `<div class="notice notice-warn" role="note"><p><strong>Modo demostración.</strong> Este pedido se guardó solo en este dispositivo: BLACK todavía no lo recibe.</p></div>` : ''}
+      ${order.demo && cfg.demoMode ? `<div class="notice notice-warn" role="note"><p><strong>Modo demostración.</strong> Este pedido se guardó solo en este dispositivo: Rincón de Sueño todavía no lo recibe.</p></div>` : ''}
       ${payNote ? `<div class="notice" role="status"><p>${esc(payNote)}</p></div>` : ''}
       <div class="done-grid">
         <section class="card" aria-labelledby="t-order">
@@ -448,7 +450,7 @@
             <div><dt>Cliente</dt><dd>${esc(order.customer.name)}<br>${esc(order.customer.phone)}<br>${esc(order.customer.email)}</dd></div>
             ${order.delivery.notes ? `<div><dt>Observaciones</dt><dd>${esc(order.delivery.notes)}</dd></div>` : ''}
           </dl>
-          <p class="fine">${Payments.enabled() ? '' : 'El pago se coordina con el local. '}¿Dudas sobre tu pedido? <a href="${waLink(`Hola BLACK, consulto por mi pedido ${order.number}.`)}" target="_blank" rel="noopener">Escribinos por WhatsApp</a>.</p>
+          <p class="fine">${Payments.enabled() ? '' : 'El pago se coordina con el local. '}¿Dudas sobre tu pedido? <a href="${waLink(`Hola Rincón de Sueño, consulto por mi pedido ${order.number}.`)}" target="_blank" rel="noopener">Escribinos por WhatsApp</a>.</p>
         </section>
       </div>
       <div class="actions-row"><a class="btn btn-red btn-lg" href="productos.html">Seguir comprando</a></div>`;
@@ -467,7 +469,7 @@
       </${href ? 'a' : 'div'}>`;
     $('#contact-grid').innerHTML = [
       card('tel:' + b.phone.replace(/[^\d+]/g, ''), 'phone', 'Teléfono', `<strong>${esc(b.phone)}</strong>`),
-      card(waLink('Hola BLACK, quiero hacer una consulta.'), 'chat', 'WhatsApp', 'Para consultas sobre productos y servicios.', true),
+      card(waLink('Hola Rincón de Sueño, quiero hacer una consulta.'), 'chat', 'WhatsApp', 'Para consultas sobre productos y pedidos.', true),
       card(maps, 'pin', 'Dirección', `${esc(b.address)}<br>${esc(b.city)}<br><strong>Cómo llegar</strong>`, true),
       card('https://instagram.com/' + b.instagram, 'insta', 'Instagram', `@${esc(b.instagram)}`, true),
       card('', 'clock', 'Horarios', b.hours.map(([d, h]) => `${esc(d)}: <strong>${esc(h)}</strong>`).join('<br>')),
