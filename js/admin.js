@@ -159,7 +159,7 @@
         ${thumb(p)}
         <div class="adm-main-info">
           <p class="adm-name">${esc(p.name)}</p>
-          <p class="adm-sub">${esc(catName(p.category))}</p>
+          <p class="adm-sub">${esc(catName(p.category))}${p.colors && p.colors.length ? ` · ${p.colors.length} ${p.colors.length === 1 ? 'color' : 'colores'}` : ''}</p>
         </div>
         <p class="adm-num"><span class="adm-lbl">Precio</span>${fmt(p.price)}</p>
         <p class="adm-num"><span class="adm-lbl">Stock</span>${p.stock}</p>
@@ -194,6 +194,66 @@
   let editing = null;
   let imageData = '';   // URL existente, o data: URL si se eligió una foto nueva
 
+  /* --- Colores disponibles del producto (se guardan dentro de art.colors) --- */
+  const COLOR_HINTS = {
+    blanco: '#f5f2ec', negro: '#1f1c1a', gris: '#8d8d8d', 'gris claro': '#c9c9c9', 'gris oscuro': '#555555',
+    rojo: '#c0392b', bordo: '#6e1f2e', rosa: '#e8b4c0', fucsia: '#c2185b', salmon: '#f08a7a',
+    naranja: '#e67e22', amarillo: '#f1c40f', mostaza: '#d4a017',
+    verde: '#3f7d4e', 'verde agua': '#9fd3c7', 'verde oliva': '#6b7a3a',
+    celeste: '#8ec5e8', azul: '#2c5aa0', 'azul marino': '#1b2a4a', turquesa: '#1fa6a0',
+    violeta: '#6a3d9a', lila: '#c3a6e0',
+    beige: '#d9c8ad', crema: '#f1e6cf', natural: '#e3d5bd', arena: '#d8c3a0', marron: '#7b5236', chocolate: '#4e342e',
+  };
+  let formColors = [];
+  let hexTouched = false;
+  const colorNameEl = $('#p-color-name');
+  const colorHexEl = $('#p-color-hex');
+  const colorList = $('#p-color-list');
+  const colorErr = $('#p-err-color');
+
+  function renderFormColors() {
+    colorList.innerHTML = formColors.map((c, i) => `<li class="color-chip"><span class="swatch-dot sm" style="--sw:${esc(c.hex)}" aria-hidden="true"></span><span>${esc(c.name)}</span><button class="color-chip-x" type="button" data-rm-color="${i}" aria-label="Quitar el color ${esc(c.name)}">×</button></li>`).join('');
+  }
+  function addFormColor() {
+    let name = colorNameEl.value.trim().replace(/\s+/g, ' ');
+    name = name.charAt(0).toUpperCase() + name.slice(1);
+    let err = '';
+    if (name.length < 2) err = 'Escribí el nombre del color, por ejemplo "Rojo".';
+    else if (name.length > 30) err = 'El nombre puede tener hasta 30 letras.';
+    else if (formColors.some((c) => norm(c.name) === norm(name))) err = 'Ese color ya está en la lista.';
+    else if (formColors.length >= 12) err = 'Podés cargar hasta 12 colores por producto.';
+    colorErr.textContent = err;
+    if (err) { colorNameEl.setAttribute('aria-invalid', 'true'); colorNameEl.focus(); return; }
+    colorNameEl.removeAttribute('aria-invalid');
+    formColors.push({ name, hex: /^#[0-9a-f]{6}$/i.test(colorHexEl.value) ? colorHexEl.value.toLowerCase() : '#cccccc' });
+    renderFormColors();
+    colorNameEl.value = '';
+    hexTouched = false;
+    colorNameEl.focus();
+  }
+  $('#p-color-add').addEventListener('click', addFormColor);
+  colorNameEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addFormColor(); } });
+  colorNameEl.addEventListener('input', () => {
+    colorErr.textContent = '';
+    colorNameEl.removeAttribute('aria-invalid');
+    const hint = COLOR_HINTS[norm(colorNameEl.value).trim()];
+    if (hint && !hexTouched) colorHexEl.value = hint;
+  });
+  colorHexEl.addEventListener('input', () => { hexTouched = true; });
+  colorList.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rm-color]');
+    if (!b) return;
+    formColors.splice(Number(b.dataset.rmColor), 1);
+    renderFormColors();
+    colorNameEl.focus();
+  });
+  /* El dibujo del producto conserva su forma y se guarda junto con los colores */
+  function productArt() {
+    const base = Object.assign({}, (editing && editing.art) || { shape: 'folded', color: '#b9a3b0' });
+    if (formColors.length) base.colors = formColors.map((c) => ({ name: c.name, hex: c.hex })); else delete base.colors;
+    return base;
+  }
+
   function showPreview() {
     const p = { art: (editing && editing.art) || { shape: 'folded', color: '#b9a3b0' }, image: imageData };
     $('#p-preview').innerHTML = thumb(p).replace(/^<div class="c-thumb">|<\/div>$/g, '');
@@ -216,6 +276,13 @@
     $('#p-form-error').textContent = '';
     $('#p-img-msg').textContent = 'Sin foto se muestra un dibujo genérico.';
     $('#p-file').value = '';
+    formColors = p && Array.isArray(p.colors) ? p.colors.map((c) => ({ name: c.name, hex: c.hex })) : [];
+    renderFormColors();
+    colorNameEl.value = '';
+    colorHexEl.value = '#c0392b';
+    hexTouched = false;
+    colorErr.textContent = '';
+    colorNameEl.removeAttribute('aria-invalid');
     showPreview();
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
     form.elements.name.focus();
@@ -310,6 +377,11 @@
       $('#p-form-error').textContent = 'Primero creá una categoría en la pestaña "Categorías".';
       return;
     }
+    /* Si quedó un color escrito sin tocar "Agregar", se suma solo para que no se pierda */
+    if (colorNameEl.value.trim()) {
+      addFormColor();
+      if (colorErr.textContent) return;
+    }
 
     const submitBtn = form.querySelector('button[type="submit"]');
     saving = true; submitBtn.disabled = true;
@@ -330,7 +402,7 @@
         featured: form.elements.featured.checked,
         active: form.elements.active.checked,
         image_url: imageUrl || null,
-        art: (editing && editing.art) || { shape: 'folded', color: '#b9a3b0' },
+        art: productArt(),
       };
       const { error } = await sb.from('products').upsert(row);
       if (error) throw error;

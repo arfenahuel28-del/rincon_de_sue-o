@@ -176,6 +176,23 @@ h2 { margin-bottom: 14px; font-size: clamp(1.5rem, 4vw, 2.1rem); font-weight: 70
 .empty-lg .ico { color: var(--accent); }
 .empty-lg h2 { margin: 8px 0 0; }
 
+/* ---------- Colores de producto ---------- */
+.p-colors { min-width: 0; margin: 0 0 10px; padding: 0; border: 0; }
+.p-colors-legend { padding: 0; margin-bottom: 2px; color: var(--muted); font-size: .8rem; font-weight: 700; }
+.p-colors-pick { color: var(--ink); }
+.p-colors.is-missing .p-colors-pick { color: var(--bad); }
+.p-colors-row { display: flex; flex-wrap: wrap; }
+.swatch { position: relative; display: grid; width: 44px; height: 44px; place-items: center; cursor: pointer; }
+.swatch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.swatch-dot { display: block; width: 28px; height: 28px; border-radius: 50%; background: var(--sw, #ccc); border: 1px solid rgba(38,32,29,.35); transition: box-shadow .15s; }
+.swatch-dot.sm { width: 18px; height: 18px; flex: none; }
+.swatch:hover .swatch-dot { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--line); }
+.swatch input:checked + .swatch-dot { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink); }
+.swatch input:focus-visible + .swatch-dot { outline: 3px solid var(--accent); outline-offset: 5px; }
+.c-color { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; color: var(--muted); font-size: .85rem; font-weight: 600; }
+.ol-color { color: var(--muted); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .swatch-dot { transition: none; } }
+
 /* ---------- Carrito ---------- */
 .cart-layout { display: grid; gap: 18px; }
 .cart-table { width: 100%; border-collapse: collapse; }
@@ -266,7 +283,7 @@ h2 { margin-bottom: 14px; font-size: clamp(1.5rem, 4vw, 2.1rem); font-weight: 70
 .facts { margin: 0 0 12px; }
 .facts div { padding: 9px 0; border-bottom: 1px solid var(--line); }
 .facts dt { color: var(--muted); font-size: .8rem; font-weight: 700; }
-.facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; white-space: pre-line; }
 
 /* ---------- Nosotros y contacto ---------- */
 .story { margin-bottom: 22px; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
@@ -463,6 +480,16 @@ body.has-bar .toast { bottom: 96px; }
 .b-amber { background: #fff1d6; color: var(--warn); }
 .b-green { background: #e0eedf; color: var(--ok); }
 .b-dark { background: var(--black); color: #fff; }
+
+/* Colores en el formulario de producto (panel) */
+.color-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.color-add input[type="text"] { flex: 1 1 140px; width: auto; min-width: 0; }
+.field .color-add input.color-pick { width: 56px; min-height: 50px; padding: 4px; cursor: pointer; }
+.color-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+.color-list:empty { display: none; }
+.color-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 4px 0 12px; border: 2px solid var(--line); border-radius: 22px; background: #fff; font-weight: 600; }
+.color-chip-x { display: grid; width: 44px; height: 44px; margin-right: -2px; place-items: center; border: 0; border-radius: 50%; background: none; color: var(--muted); font-size: 1.4rem; line-height: 1; cursor: pointer; }
+.color-chip-x:hover { background: var(--bg); color: var(--bad); }
 
 /* Categorías (panel) */
 .adm-item.adm-cat { grid-template-columns: 48px 1fr; }

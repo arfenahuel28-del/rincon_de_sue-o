@@ -20,11 +20,25 @@
     return { cls: 'ok', text: 'Disponible' };
   }
 
-  function mediaHTML(p) {
+  function mediaHTML(p, colorHex) {
     const art = p.art || { shape: 'folded', color: '#b9a3b0' };
-    const drawing = `<svg class="p-art" style="--c:${esc(art.color)}" aria-hidden="true" focusable="false"><use href="#p-${esc(art.shape)}"/></svg>`;
+    const drawing = `<svg class="p-art" style="--c:${esc(colorHex || art.color)}" aria-hidden="true" focusable="false"><use href="#p-${esc(art.shape)}"/></svg>`;
     const photo = p.image ? `<img class="p-photo" src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy" width="400" height="400">` : '';
     return drawing + photo;
+  }
+
+  /* Selector de color (solo si el producto tiene colores cargados). Nadie queda preseleccionado:
+     el cliente tiene que elegir, así no se compra un color por error. */
+  function colorPickerHTML(p) {
+    const colors = Catalog.colors(p);
+    if (!colors.length) return '';
+    return `
+        <fieldset class="p-colors">
+          <legend class="p-colors-legend">Color: <span class="p-colors-pick" data-color-label>Elegí uno</span></legend>
+          <div class="p-colors-row">
+            ${colors.map((c) => `<label class="swatch" title="${esc(c.name)}"><input type="radio" name="color-${esc(p.id)}" value="${esc(c.name)}" data-color-pick data-hex="${esc(c.hex)}"><span class="swatch-dot" style="--sw:${esc(c.hex)}" aria-hidden="true"></span><span class="sr-only">${esc(c.name)}</span></label>`).join('')}
+          </div>
+        </fieldset>`;
   }
 
   function productCard(p) {
@@ -41,6 +55,7 @@
           <span class="p-price">${fmt(p.price)}</span>
           <span class="stock stock-${s.cls}">${s.text}</span>
         </div>
+        ${avail ? colorPickerHTML(p) : ''}
         ${avail
           ? `<button class="btn btn-red btn-block" type="button" data-add="${esc(p.id)}" aria-label="Agregar ${esc(p.name)} al carrito"><svg class="ico" aria-hidden="true"><use href="#i-cart"/></svg><span>Agregar<span class="btn-more"> al carrito</span></span></button>`
           : `<button class="btn btn-block" type="button" disabled>Sin stock</button>`}
@@ -67,9 +82,39 @@
     const btn = e.target.closest('[data-add]');
     if (!btn) return;
     const p = Catalog.get(btn.dataset.add);
-    const r = Cart.add(btn.dataset.add);
-    if (r.ok) B.toast(`${p.name} agregado al carrito.`, { href: 'carrito.html', label: 'Ver carrito' });
-    else B.toast(r.reason === 'max' ? 'Ya tenés en el carrito todo el stock disponible.' : 'Este producto está sin stock.');
+    let color = '';
+    if (p && Catalog.colors(p).length) {
+      const card = btn.closest('.p-card');
+      const picked = card && card.querySelector('input[data-color-pick]:checked');
+      if (!picked) {
+        const box = card && card.querySelector('.p-colors');
+        if (box) {
+          box.classList.add('is-missing');
+          const first = box.querySelector('input[data-color-pick]');
+          if (first) first.focus();
+        }
+        B.toast(`Elegí un color de ${p.name}.`);
+        return;
+      }
+      color = picked.value;
+    }
+    const r = Cart.add(btn.dataset.add, 1, color);
+    if (r.ok) B.toast(`${p.name}${color ? ` (${color})` : ''} agregado al carrito.`, { href: 'carrito.html', label: 'Ver carrito' });
+    else B.toast(r.reason === 'max' ? 'Ya tenés en el carrito todo el stock disponible.' : r.reason === 'color' ? 'Elegí un color para agregarlo.' : 'Este producto está sin stock.');
+  });
+
+  /* Al elegir un color: se muestra su nombre y el dibujo del producto toma ese tono */
+  document.addEventListener('change', (e) => {
+    const input = e.target.closest && e.target.closest('input[data-color-pick]');
+    if (!input) return;
+    const card = input.closest('.p-card');
+    if (!card) return;
+    const box = card.querySelector('.p-colors');
+    if (box) box.classList.remove('is-missing');
+    const label = card.querySelector('[data-color-label]');
+    if (label) label.textContent = input.value;
+    const art = card.querySelector('.p-art');
+    if (art && input.dataset.hex) art.style.setProperty('--c', input.dataset.hex);
   });
 
   /* ==========================================================
@@ -126,7 +171,7 @@
     function filtered() {
       const q = norm(state.q).trim();
       let list = all.filter((p) => (state.cat === 'all' || p.category === state.cat)
-        && (!q || norm(`${p.name} ${p.description} ${Catalog.categoryName(p.category)}`).includes(q)));
+        && (!q || norm(`${p.name} ${p.description} ${Catalog.categoryName(p.category)} ${Catalog.colors(p).map((c) => c.name).join(' ')}`).includes(q)));
       const byName = (a, b) => a.name.localeCompare(b.name, 'es');
       if (state.sort === 'precio-asc') list.sort((a, b) => a.price - b.price);
       else if (state.sort === 'precio-desc') list.sort((a, b) => b.price - a.price);
@@ -184,6 +229,7 @@
           name: p.name,
           description: p.description,
           category: Catalog.categoryName(p.category),
+          ...(Catalog.colors(p).length ? { color: Catalog.colors(p).map((c) => c.name).join(', ') } : {}),
           offers: { '@type': 'Offer', priceCurrency: 'ARS', price: p.price, availability: Catalog.isAvailable(p) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock' },
         },
       })),
@@ -223,17 +269,18 @@
             ${lines.map((l) => `
             <tr>
               <td class="c-prod"><div class="c-inner">
-                <div class="c-thumb">${mediaHTML(l.product)}</div>
+                <div class="c-thumb">${mediaHTML(l.product, Catalog.colorHex(l.product, l.color))}</div>
                 <div>
                   <p class="c-name">${esc(l.product.name)}</p>
-                  <button class="link-btn" type="button" data-remove="${esc(l.product.id)}">Quitar<span class="sr-only"> ${esc(l.product.name)} del carrito</span></button>
+                  ${l.color ? `<p class="c-color"><span class="swatch-dot sm" style="--sw:${esc(Catalog.colorHex(l.product, l.color))}" aria-hidden="true"></span>Color: ${esc(l.color)}</p>` : ''}
+                  <button class="link-btn" type="button" data-remove="${esc(l.product.id)}" data-color="${esc(l.color)}">Quitar<span class="sr-only"> ${esc(l.product.name)}${l.color ? ` color ${esc(l.color)}` : ''} del carrito</span></button>
                 </div>
               </div></td>
               <td class="c-qty" data-label="Cantidad">
-                <div class="stepper" role="group" aria-label="Cantidad de ${esc(l.product.name)}">
-                  <button type="button" data-qty="${esc(l.product.id)}" data-act="dec" aria-label="Restar uno"><svg class="ico" aria-hidden="true"><use href="#i-minus"/></svg></button>
+                <div class="stepper" role="group" aria-label="Cantidad de ${esc(l.product.name)}${l.color ? ` color ${esc(l.color)}` : ''}">
+                  <button type="button" data-qty="${esc(l.product.id)}" data-color="${esc(l.color)}" data-act="dec" aria-label="Restar uno"><svg class="ico" aria-hidden="true"><use href="#i-minus"/></svg></button>
                   <output aria-live="polite">${l.qty}</output>
-                  <button type="button" data-qty="${esc(l.product.id)}" data-act="inc" aria-label="Sumar uno"${l.qty >= l.product.stock ? ' disabled' : ''}><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button>
+                  <button type="button" data-qty="${esc(l.product.id)}" data-color="${esc(l.color)}" data-act="inc" aria-label="Sumar uno"${Cart.totalOf(l.product.id) >= l.product.stock ? ' disabled' : ''}><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button>
                 </div>
               </td>
               <td class="c-price" data-label="Precio">${fmt(l.unitPrice)}</td>
@@ -258,7 +305,8 @@
       bar.innerHTML = `<div><span class="bar-label">Total</span><strong>${fmt(total)}</strong></div><a class="btn btn-red btn-lg" href="checkout.html">Continuar con el pedido</a>`;
 
       if (focusAfter) {
-        const el = root.querySelector(`[data-qty="${focusAfter.id}"][data-act="${focusAfter.act}"]:not([disabled])`) || root.querySelector(`[data-qty="${focusAfter.id}"]:not([disabled])`);
+        const same = [...root.querySelectorAll('[data-qty]')].filter((x) => x.dataset.qty === focusAfter.id && (x.dataset.color || '') === focusAfter.color && !x.disabled);
+        const el = same.find((x) => x.dataset.act === focusAfter.act) || same[0];
         if (el) el.focus();
         focusAfter = null;
       }
@@ -269,11 +317,12 @@
       const r = e.target.closest('[data-remove]');
       if (q) {
         const id = q.dataset.qty;
-        focusAfter = { id, act: q.dataset.act };
-        Cart.setQty(id, Cart.qtyOf(id) + (q.dataset.act === 'inc' ? 1 : -1));
+        const color = q.dataset.color || '';
+        focusAfter = { id, color, act: q.dataset.act };
+        Cart.setQty(id, Cart.qtyOf(id, color) + (q.dataset.act === 'inc' ? 1 : -1), color);
         render();
       } else if (r) {
-        Cart.remove(r.dataset.remove);
+        Cart.remove(r.dataset.remove, r.dataset.color || '');
         render();
         const h = $('h1');
         if (h) { h.setAttribute('tabindex', '-1'); h.focus(); }
@@ -321,7 +370,7 @@
       summary.innerHTML = `
         ${noticeList.length ? `<div class="notice" role="status">${noticeList.map((n) => `<p>${esc(n)}</p>`).join('')}</div>` : ''}
         <ul class="order-lines">
-          ${lines.map((l) => `<li><span class="ol-name">${esc(l.product.name)}</span><span class="ol-qty">× ${l.qty}</span><span class="ol-price">${fmt(l.subtotal)}</span></li>`).join('')}
+          ${lines.map((l) => `<li><span class="ol-name">${esc(l.product.name)}${l.color ? ` <small class="ol-color">· ${esc(l.color)}</small>` : ''}</span><span class="ol-qty">× ${l.qty}</span><span class="ol-price">${fmt(l.subtotal)}</span></li>`).join('')}
         </ul>
         <p class="order-total"><span>Total</span><strong>${fmt(total)}</strong></p>`;
       bar.innerHTML = `<div><span class="bar-label">Total</span><strong>${fmt(total)}</strong></div><button class="btn btn-red btn-lg" type="submit" form="checkout-form">Confirmar pedido</button>`;
@@ -437,7 +486,7 @@
         <section class="card" aria-labelledby="t-order">
           <h2 id="t-order">Tu pedido</h2>
           <ul class="order-lines">
-            ${order.items.map((i) => `<li><span class="ol-name">${esc(i.name)}</span><span class="ol-qty">× ${i.quantity}</span><span class="ol-price">${fmt(i.subtotal)}</span></li>`).join('')}
+            ${order.items.map((i) => `<li><span class="ol-name">${esc(i.name)}${i.color ? ` <small class="ol-color">· ${esc(i.color)}</small>` : ''}</span><span class="ol-qty">× ${i.quantity}</span><span class="ol-price">${fmt(i.subtotal)}</span></li>`).join('')}
           </ul>
           <p class="order-total"><span>Total</span><strong>${fmt(order.total)}</strong></p>
         </section>

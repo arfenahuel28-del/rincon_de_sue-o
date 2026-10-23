@@ -35,6 +35,12 @@
     return sbPromise;
   }
 
+  /* Colores disponibles de un producto. Se guardan dentro de la columna art (jsonb) como
+     art.colors = [{ name: 'Rojo', hex: '#c0392b' }, ...], así no hace falta cambiar la base. */
+  const cleanColors = (art) => (art && Array.isArray(art.colors) ? art.colors : [])
+    .filter((c) => c && typeof c.name === 'string' && c.name.trim())
+    .map((c) => ({ name: c.name.trim().slice(0, 30), hex: /^#[0-9a-f]{6}$/i.test(c.hex || '') ? c.hex : '#cccccc' }));
+
   /* Fila de la base (snake_case) → producto de la web (camelCase) */
   const rowToProduct = (r) => ({
     id: r.id,
@@ -48,6 +54,7 @@
     active: r.active !== false,
     image: r.image_url || '',
     art: r.art && r.art.shape ? r.art : { shape: 'folded', color: '#b9a3b0' },
+    colors: cleanColors(r.art),
   });
 
   /* Estados que maneja el panel de administración */
@@ -129,63 +136,89 @@
     get(id) { return this.products().find((p) => p.id === id); },
     categoryName(id) { const c = this.categories().find((x) => x.id === id); return c ? c.name : ''; },
     isAvailable(p) { return !p.soldOut && p.stock > 0; },
+    colors(p) { return p && Array.isArray(p.colors) ? p.colors : []; },
+    colorHex(p, name) { const c = this.colors(p).find((x) => x.name === name); return c ? c.hex : ''; },
   };
 
-  /* ---------- Carrito (persiste en localStorage entre páginas) ---------- */
+  /* ---------- Carrito (persiste en localStorage entre páginas) ----------
+     Cada línea es { id, qty, color }. El mismo producto puede estar en varias líneas
+     (una por color), pero el stock es uno solo: la suma de todas no puede superarlo. */
   const Cart = {
     _read() {
       const v = storage.get(KEYS.cart, []);
-      return Array.isArray(v) ? v.filter((i) => i && typeof i.id === 'string' && Number.isInteger(i.qty) && i.qty > 0) : [];
+      return Array.isArray(v)
+        ? v.filter((i) => i && typeof i.id === 'string' && Number.isInteger(i.qty) && i.qty > 0)
+            .map((i) => ({ id: i.id, qty: i.qty, color: typeof i.color === 'string' ? i.color : '' }))
+        : [];
     },
     _write(items) {
       storage.set(KEYS.cart, items);
       document.dispatchEvent(new CustomEvent('cart:change'));
     },
     count() { return this._read().reduce((n, i) => n + i.qty, 0); },
-    qtyOf(id) { const it = this._read().find((i) => i.id === id); return it ? it.qty : 0; },
+    qtyOf(id, color = '') { const it = this._read().find((i) => i.id === id && i.color === color); return it ? it.qty : 0; },
+    totalOf(id) { return this._read().filter((i) => i.id === id).reduce((n, i) => n + i.qty, 0); },
     lines() {
       return this._read()
         .map((i) => {
           const p = Catalog.get(i.id);
-          return p ? { product: p, qty: i.qty, unitPrice: p.price, subtotal: p.price * i.qty } : null;
+          return p ? { product: p, qty: i.qty, color: i.color, unitPrice: p.price, subtotal: p.price * i.qty } : null;
         })
         .filter(Boolean);
     },
     total() { return this.lines().reduce((sum, l) => sum + l.subtotal, 0); },
-    add(id, qty = 1) {
+    add(id, qty = 1, color = '') {
       const p = Catalog.get(id);
       if (!p || !Catalog.isAvailable(p)) return { ok: false, reason: 'sin_stock' };
+      const colors = Catalog.colors(p);
+      if (colors.length && !colors.some((c) => c.name === color)) return { ok: false, reason: 'color' };
+      if (!colors.length) color = '';
       const items = this._read();
-      const it = items.find((i) => i.id === id);
-      const current = it ? it.qty : 0;
-      if (current >= p.stock) return { ok: false, reason: 'max' };
-      const next = Math.min(current + qty, p.stock);
-      if (it) it.qty = next; else items.push({ id, qty: next });
+      const it = items.find((i) => i.id === id && i.color === color);
+      const total = items.filter((i) => i.id === id).reduce((n, i) => n + i.qty, 0);
+      if (total >= p.stock) return { ok: false, reason: 'max' };
+      const inc = Math.min(qty, p.stock - total);
+      if (it) it.qty += inc; else items.push({ id, qty: inc, color });
       this._write(items);
-      return { ok: true, qty: next };
+      return { ok: true, qty: it ? it.qty : inc };
     },
-    setQty(id, qty) {
-      if (qty <= 0) return this.remove(id);
+    setQty(id, qty, color = '') {
+      if (qty <= 0) return this.remove(id, color);
       const p = Catalog.get(id);
-      if (!p) return this.remove(id);
+      if (!p) return this.remove(id, color);
       const items = this._read();
-      const it = items.find((i) => i.id === id);
+      const it = items.find((i) => i.id === id && i.color === color);
       if (!it) return;
-      it.qty = Math.min(qty, p.stock);
+      const others = items.filter((i) => i.id === id && i !== it).reduce((n, i) => n + i.qty, 0);
+      const next = Math.min(qty, p.stock - others);
+      if (next <= 0) return this.remove(id, color);
+      it.qty = next;
       this._write(items);
     },
-    remove(id) { this._write(this._read().filter((i) => i.id !== id)); },
+    remove(id, color = '') { this._write(this._read().filter((i) => !(i.id === id && i.color === color))); },
     clear() { this._write([]); },
     reconcile() {
       const notes = [];
       const out = [];
+      const used = {};
       this._read().forEach((i) => {
         const p = Catalog.get(i.id);
         if (!p || !Catalog.isAvailable(p)) { notes.push(`${p ? p.name : 'Un producto'} ya no está disponible y lo quitamos del carrito.`); return; }
-        if (i.qty > p.stock) { notes.push(`Ajustamos ${p.name} al stock disponible (${p.stock}).`); out.push({ id: i.id, qty: p.stock }); return; }
-        out.push(i);
+        const colors = Catalog.colors(p);
+        let color = i.color;
+        if (colors.length) {
+          if (!color) { notes.push(`${p.name} ahora se vende en varios colores: lo quitamos del carrito. Volvé a agregarlo eligiendo el color.`); return; }
+          if (!colors.some((c) => c.name === color)) { notes.push(`El color ${color} de ${p.name} ya no está disponible y lo quitamos del carrito.`); return; }
+        } else color = '';
+        const left = p.stock - (used[i.id] || 0);
+        if (left <= 0) { notes.push(`${p.name} ya no tiene stock suficiente y lo quitamos del carrito.`); return; }
+        const qty = Math.min(i.qty, left);
+        if (qty < i.qty) notes.push(`Ajustamos ${p.name} al stock disponible (${p.stock}).`);
+        used[i.id] = (used[i.id] || 0) + qty;
+        const same = out.find((o) => o.id === i.id && o.color === color);
+        if (same) same.qty += qty; else out.push({ id: i.id, qty, color });
       });
-      if (notes.length) this._write(out);
+      if (notes.length || JSON.stringify(out) !== JSON.stringify(this._read())) this._write(out);
       return notes;
     },
   };
@@ -203,11 +236,14 @@
 
   const Orders = {
     buildPayload(form, lines) {
-      const items = lines.map((l) => ({ productId: l.product.id, name: l.product.name, unitPrice: l.unitPrice, quantity: l.qty, subtotal: l.subtotal }));
+      const items = lines.map((l) => ({ productId: l.product.id, name: l.product.name, color: l.color || '', unitPrice: l.unitPrice, quantity: l.qty, subtotal: l.subtotal }));
+      /* La base no guarda el color en cada línea: se agrega a las observaciones para que el local lo vea en el pedido. */
+      const colorLines = lines.filter((l) => l.color).map((l) => `${l.product.name} → ${l.color} (×${l.qty})`);
+      const notes = [form.notes, colorLines.length ? 'Colores elegidos:\n' + colorLines.join('\n') : ''].filter(Boolean).join('\n\n');
       const method = cfg.delivery.find((d) => d.id === form.delivery) || cfg.delivery[0];
       return {
         customer: { name: form.name, phone: form.phone, email: form.email },
-        delivery: { method: method.id, label: method.label, address: method.needsAddress ? form.address : '', notes: form.notes },
+        delivery: { method: method.id, label: method.label, address: method.needsAddress ? form.address : '', notes },
         items,
         total: items.reduce((s, i) => s + i.subtotal, 0),
       };
@@ -226,6 +262,10 @@
           payment: data.payment || { status: 'pendiente', provider: null, providerPaymentId: null },
         });
         delete order.duplicate;
+        /* La respuesta de la base no trae el color: se vuelve a poner para mostrarlo en la confirmación. */
+        if (Array.isArray(order.items) && order.items.length === payload.items.length) {
+          order.items = order.items.map((it, n) => Object.assign({}, it, { color: payload.items[n].color || '' }));
+        }
         storage.remove(KEYS.idem);
       } else if (cfg.endpoints.orders) {
         const res = await fetch(cfg.endpoints.orders, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
