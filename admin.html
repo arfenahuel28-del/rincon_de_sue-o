@@ -55,6 +55,7 @@
         <button class="adm-tab is-active" role="tab" id="tab-productos" aria-selected="true" aria-controls="panel-productos" type="button">Productos</button>
         <button class="adm-tab" role="tab" id="tab-categorias" aria-selected="false" aria-controls="panel-categorias" type="button">Categorías</button>
         <button class="adm-tab" role="tab" id="tab-pedidos" aria-selected="false" aria-controls="panel-pedidos" type="button">Pedidos <span class="adm-count" id="orders-badge" hidden>0</span></button>
+        <button class="adm-tab" role="tab" id="tab-ventas" aria-selected="false" aria-controls="panel-ventas" type="button">Ventas</button>
       </div>
 
       <section id="panel-productos" role="tabpanel" aria-labelledby="tab-productos">
@@ -89,6 +90,34 @@
         </div>
         <p class="result-count" id="order-count" aria-live="polite"></p>
         <div id="order-list"></div>
+      </section>
+
+      <section id="panel-ventas" role="tabpanel" aria-labelledby="tab-ventas" hidden>
+        <div class="adm-toolbar adm-sales-toolbar">
+          <div class="adm-filters">
+            <div class="field"><label for="sale-period">Período</label>
+              <select class="select" id="sale-period">
+                <option value="today">Hoy</option>
+                <option value="week">Últimos 7 días</option>
+                <option value="month" selected>Este mes</option>
+                <option value="all">Todo</option>
+              </select></div>
+            <div class="field"><label for="sale-channel">Canal</label>
+              <select class="select" id="sale-channel">
+                <option value="all">Online y local</option>
+                <option value="online">Solo online</option>
+                <option value="local">Solo en el local</option>
+              </select></div>
+          </div>
+          <div class="adm-toolbar-actions">
+            <button class="btn btn-line" type="button" id="sale-csv">Descargar Excel (CSV)</button>
+            <button class="btn btn-red" type="button" id="new-sale">+ Venta en el local</button>
+          </div>
+        </div>
+        <p class="form-error" id="sale-load-error" role="alert"></p>
+        <div class="sale-summary" id="sale-summary" aria-live="polite"></div>
+        <p class="result-count" id="sale-count" aria-live="polite"></p>
+        <div id="sale-list"></div>
       </section>
 
     </main>
@@ -161,6 +190,67 @@
       <div class="adm-dialog-actions">
         <button class="btn btn-line" type="button" id="p-cancel">Cancelar</button>
         <button class="btn btn-red" type="submit">Guardar producto</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Venta en el local -->
+  <dialog class="adm-dialog" id="sale-dialog" aria-labelledby="sale-dialog-title">
+    <form id="sale-form" novalidate>
+      <h2 id="sale-dialog-title">Venta en el local</h2>
+      <p class="fine">Cargá lo que se vendió. Los productos de la tienda descuentan stock solos.</p>
+
+      <fieldset class="sale-add">
+        <legend>Agregar producto</legend>
+        <div class="field">
+          <label for="s-prod">Producto</label>
+          <select class="select" id="s-prod"></select>
+        </div>
+        <div class="field" id="s-name-wrap" hidden>
+          <label for="s-name">Nombre del producto</label>
+          <input id="s-name" type="text" maxlength="160" autocomplete="off">
+        </div>
+        <div class="field" id="s-color-wrap" hidden>
+          <label for="s-color">Color</label>
+          <select class="select" id="s-color"></select>
+        </div>
+        <div class="field-row">
+          <div class="field"><label for="s-qty">Cantidad</label><input id="s-qty" type="number" inputmode="numeric" min="1" step="1" value="1"></div>
+          <div class="field"><label for="s-price">Precio unitario ($)</label><input id="s-price" type="number" inputmode="decimal" min="0" step="0.01"></div>
+        </div>
+        <p class="field-error" id="s-err-line" role="alert"></p>
+        <button class="btn btn-line" type="button" id="s-add">Agregar a la venta</button>
+      </fieldset>
+
+      <ul class="order-lines sale-lines" id="s-lines" aria-live="polite"></ul>
+      <p class="order-total"><span>Total</span><strong id="s-total">$ 0</strong></p>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="s-pay">Medio de pago</label>
+          <select class="select" id="s-pay">
+            <option value="efectivo">Efectivo</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="debito">Tarjeta de débito</option>
+            <option value="credito">Tarjeta de crédito</option>
+            <option value="mercadopago">Mercado Pago</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="s-customer">Cliente (opcional)</label>
+          <input id="s-customer" type="text" maxlength="160" autocomplete="off">
+        </div>
+      </div>
+      <div class="field">
+        <label for="s-notes">Observaciones (opcional)</label>
+        <input id="s-notes" type="text" maxlength="500" autocomplete="off">
+      </div>
+
+      <p class="form-error" id="s-form-error" role="alert"></p>
+      <div class="adm-dialog-actions">
+        <button class="btn btn-line" type="button" id="s-cancel">Cancelar</button>
+        <button class="btn btn-red" type="submit">Registrar venta</button>
       </div>
     </form>
   </dialog>

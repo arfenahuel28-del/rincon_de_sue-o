@@ -549,3 +549,30 @@ body.has-bar .toast { bottom: 96px; }
   .adm-order summary .adm-badge { justify-self: end; }
   .adm-dialog form { padding: 26px 26px; }
 }
+
+/* ---------- Admin: ventas ---------- */
+.adm-sales-toolbar { gap: 12px; }
+.adm-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.adm-filters .field { margin: 0; }
+.sale-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 4px 0 14px; }
+.sale-card { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); min-width: 0; }
+.sale-card span { font-size: .85rem; color: var(--muted); font-weight: 700; }
+.sale-card strong { font: 700 1.35rem/1.15 var(--head); overflow-wrap: anywhere; }
+.sale-card small { color: var(--muted); font-size: .8rem; }
+.adm-order.is-cancelled { opacity: .72; }
+.adm-order summary .adm-badges { grid-column: 1 / -1; }
+.b-chan { background: #efe3ea; color: var(--accent); }
+.sale-add { margin: 12px 0; padding: 12px 14px 14px; border: 1px solid var(--line); border-radius: 12px; }
+.sale-add legend { padding: 0 6px; font-weight: 700; }
+.sale-add .btn { width: 100%; }
+.sale-lines li { grid-template-columns: 1fr auto auto; align-items: center; }
+.sale-lines .sale-x { grid-column: 1 / -1; justify-self: end; min-height: 44px; padding: 0 14px; }
+#panel-ventas .adm-toolbar-actions .btn { min-height: 48px; }
+@media (min-width: 600px) {
+  .sale-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .adm-filters { grid-template-columns: repeat(2, minmax(160px, 220px)); }
+  .adm-order summary .adm-badges { grid-column: auto; justify-self: end; }
+  .sale-lines li { grid-template-columns: 1fr auto auto auto; }
+  .sale-lines .sale-x { grid-column: auto; }
+}
+#sale-dialog .order-total { margin-bottom: 16px; }

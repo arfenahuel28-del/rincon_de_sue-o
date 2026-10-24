@@ -14,6 +14,7 @@
   let products = [];
   let categories = [];
   let orders = [];
+  let storeSales = [];
 
   const catName = (id) => (categories.find((c) => c.id === id) || {}).name || '—';
 
@@ -75,6 +76,7 @@
     }
     try {
       await Promise.all([loadCategories(), loadProducts(), loadOrders()]);
+      await loadSales();
     } catch (e) {
       loginErr.textContent = 'No se pudieron cargar los datos. Revisá la conexión e intentá de nuevo.';
       showApp(false);
@@ -84,6 +86,7 @@
     renderProducts();
     renderCategories();
     renderOrders();
+    renderSales();
   }
 
   $('#login-form').addEventListener('submit', async (e) => {
@@ -113,7 +116,7 @@
   });
 
   /* ---------- Pestañas ---------- */
-  const tabs = { productos: $('#tab-productos'), categorias: $('#tab-categorias'), pedidos: $('#tab-pedidos') };
+  const tabs = { productos: $('#tab-productos'), categorias: $('#tab-categorias'), pedidos: $('#tab-pedidos'), ventas: $('#tab-ventas') };
   async function selectTab(name) {
     Object.entries(tabs).forEach(([k, el]) => {
       const on = k === name;
@@ -122,7 +125,8 @@
       $('#panel-' + k).hidden = !on;
     });
     try {
-      if (name === 'pedidos') { await loadOrders(); renderOrders(); }
+      if (name === 'ventas') { await Promise.all([loadOrders(), loadSales(), loadProducts()]); renderSales(); }
+      else if (name === 'pedidos') { await loadOrders(); renderOrders(); }
       else if (name === 'categorias') { await Promise.all([loadCategories(), loadProducts()]); renderCategories(); }
       else { await loadProducts(); renderProducts(); }
     } catch (e) { /* se queda con lo que ya está en pantalla */ }
@@ -663,6 +667,273 @@
       renderOrders(); // vuelve al valor real
     } finally {
       sel.disabled = false;
+    }
+  });
+
+  /* ==========================================================
+     VENTAS (online + local)
+     ========================================================== */
+  const PAY_LABEL = { efectivo: 'Efectivo', transferencia: 'Transferencia', debito: 'Tarjeta de débito', credito: 'Tarjeta de crédito', mercadopago: 'Mercado Pago', otro: 'Otro' };
+  const saleListEl = $('#sale-list');
+  const salePeriod = $('#sale-period');
+  const saleChannel = $('#sale-channel');
+  const saleErrEl = $('#sale-load-error');
+
+  const mapStoreSale = (r) => ({
+    channel: 'local',
+    number: r.number,
+    createdAt: r.created_at,
+    who: r.customer_name || 'Cliente del local',
+    total: Number(r.total),
+    items: (r.store_sale_items || []).map((i) => ({ name: i.name, color: i.color || '', quantity: i.quantity, subtotal: Number(i.subtotal) })),
+    statusLabel: r.status === 'anulada' ? 'Anulada' : 'Cobrada',
+    counted: r.status === 'activa',
+    pending: false,
+    cancelled: r.status === 'anulada',
+    method: PAY_LABEL[r.payment_method] || r.payment_method,
+    notes: r.notes || '',
+  });
+  const fromOrder = (o) => {
+    const dead = o.status === 'cancelado' || o.status === 'pago_rechazado';
+    const paid = o.payment && o.payment.status === 'aprobado';
+    return {
+      channel: 'online',
+      number: o.number,
+      createdAt: o.createdAt,
+      who: o.customer.name,
+      total: o.total,
+      items: o.items.map((i) => ({ name: i.name, color: '', quantity: i.quantity, subtotal: i.subtotal })),
+      statusLabel: dead ? (ORDER_STATUS[o.status] || o.status) : (paid ? 'Cobrada' : 'Por cobrar'),
+      counted: !dead && paid,
+      pending: !dead && !paid,
+      cancelled: dead,
+      method: 'Pedido online · ' + (ORDER_STATUS[o.status] || o.status),
+      notes: '',
+    };
+  };
+
+  async function loadSales() {
+    saleErrEl.textContent = '';
+    const { data, error } = await sb.from('store_sales').select('*, store_sale_items(*)').order('created_at', { ascending: false });
+    if (error) {
+      storeSales = [];
+      saleErrEl.textContent = 'Todavía no se pueden ver las ventas del local. Falta ejecutar el archivo supabase/ventas.sql en Supabase (una sola vez). Las ventas online sí se muestran.';
+      return;
+    }
+    storeSales = data.map(mapStoreSale);
+  }
+
+  function periodStart() {
+    const now = new Date();
+    const v = salePeriod.value;
+    if (v === 'today') return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (v === 'week') return new Date(now.getTime() - 7 * 86400000);
+    if (v === 'month') return new Date(now.getFullYear(), now.getMonth(), 1);
+    return null;
+  }
+  function filteredSales() {
+    const from = periodStart();
+    const ch = saleChannel.value;
+    return orders.map(fromOrder).concat(storeSales)
+      .filter((s) => (ch === 'all' || s.channel === ch) && (!from || new Date(s.createdAt) >= from))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+  const sumOf = (arr) => arr.reduce((t, s) => t + s.total, 0);
+
+  function renderSales() {
+    const rows = filteredSales();
+    const counted = rows.filter((s) => s.counted);
+    const online = counted.filter((s) => s.channel === 'online');
+    const local = counted.filter((s) => s.channel === 'local');
+    const pend = rows.filter((s) => s.pending);
+    const card = (label, value, sub) => `<div class="sale-card"><span>${label}</span><strong>${value}</strong><small>${sub}</small></div>`;
+    const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+    $('#sale-summary').innerHTML =
+      card('Total vendido', fmt(sumOf(counted)), n(counted.length, 'venta', 'ventas')) +
+      card('Online', fmt(sumOf(online)), n(online.length, 'venta', 'ventas')) +
+      card('En el local', fmt(sumOf(local)), n(local.length, 'venta', 'ventas')) +
+      card('Por cobrar', fmt(sumOf(pend)), n(pend.length, 'pedido online', 'pedidos online'));
+    $('#sale-count').textContent = n(rows.length, 'registro', 'registros');
+
+    if (!rows.length) {
+      saleListEl.innerHTML = '<div class="empty"><p>No hay ventas en este período.</p></div>';
+      return;
+    }
+    saleListEl.innerHTML = rows.map((s) => {
+      const when = new Date(s.createdAt).toLocaleString('es-AR', { dateStyle: 'medium', timeStyle: 'short' });
+      const cls = s.cancelled ? 'b-red' : (s.pending ? 'b-amber' : 'b-green');
+      return `
+      <article class="adm-order${s.cancelled ? ' is-cancelled' : ''}" data-sale="${esc(s.number)}">
+        <details>
+          <summary>
+            <span class="adm-o-num">${esc(s.number)}</span>
+            <span class="adm-o-who">${esc(s.who)}<small>${esc(when)}</small></span>
+            <span class="adm-o-total">${fmt(s.total)}</span>
+            <span class="adm-badges"><span class="adm-badge ${s.channel === 'online' ? 'b-dark' : 'b-chan'}">${s.channel === 'online' ? 'Online' : 'Local'}</span> <span class="adm-badge ${cls}">${esc(s.statusLabel)}</span></span>
+          </summary>
+          <div class="adm-o-body">
+            <ul class="order-lines">${s.items.map((i) => `<li><span class="ol-name">${esc(i.name)}${i.color ? ' · ' + esc(i.color) : ''}</span><span class="ol-qty">× ${i.quantity}</span><span class="ol-price">${fmt(i.subtotal)}</span></li>`).join('')}</ul>
+            <p class="order-total"><span>Total</span><strong>${fmt(s.total)}</strong></p>
+            <dl class="facts">
+              <div><dt>${s.channel === 'online' ? 'Origen' : 'Medio de pago'}</dt><dd>${esc(s.method)}</dd></div>
+              ${s.notes ? `<div><dt>Observaciones</dt><dd>${esc(s.notes)}</dd></div>` : ''}
+            </dl>
+            ${s.channel === 'online'
+              ? '<p class="fine">Este pedido se gestiona en la pestaña Pedidos (estado y pago).</p>'
+              : (s.cancelled ? '<p class="fine">Venta anulada: el stock ya fue devuelto.</p>' : '<button class="btn btn-line" type="button" data-cancel-sale>Anular venta</button>')}
+          </div>
+        </details>
+      </article>`;
+    }).join('');
+  }
+  salePeriod.addEventListener('change', renderSales);
+  saleChannel.addEventListener('change', renderSales);
+
+  saleListEl.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-cancel-sale]');
+    if (!btn) return;
+    const number = btn.closest('[data-sale]').dataset.sale;
+    if (!window.confirm(`¿Anular la venta ${number}? El stock de los productos vuelve a la tienda.`)) return;
+    btn.disabled = true;
+    try {
+      const { error } = await sb.rpc('cancel_store_sale', { p_number: number });
+      if (error) throw error;
+      await Promise.all([loadSales(), loadProducts()]);
+      renderSales(); renderProducts();
+      if (B.toast) B.toast('Venta anulada y stock devuelto.');
+    } catch (err) {
+      window.alert('No se pudo anular: ' + ((err && err.message) || 'error desconocido'));
+      btn.disabled = false;
+    }
+  });
+
+  /* ---------- Descargar para Excel ---------- */
+  $('#sale-csv').addEventListener('click', () => {
+    const cell = (v) => {
+      let t = String(v == null ? '' : v);
+      if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;   // evita fórmulas en Excel
+      return '"' + t.replace(/"/g, '""') + '"';
+    };
+    const num = (v) => String(Math.round(v * 100) / 100).replace('.', ',');
+    const head = ['Fecha', 'Canal', 'Número', 'Cliente', 'Producto', 'Color', 'Cantidad', 'Subtotal', 'Total de la venta', 'Medio de pago / origen', 'Estado'];
+    const lines = [head.map(cell).join(';')];
+    filteredSales().forEach((s) => {
+      const d = new Date(s.createdAt);
+      const date = d.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+      (s.items.length ? s.items : [{ name: '', color: '', quantity: '', subtotal: 0 }]).forEach((i) => {
+        lines.push([date, s.channel === 'online' ? 'Online' : 'Local', s.number, s.who, i.name, i.color, i.quantity, num(i.subtotal), num(s.total), s.method, s.statusLabel].map(cell).join(';'));
+      });
+    });
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'ventas-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  /* ---------- Registrar venta en el local ---------- */
+  const saleDlg = $('#sale-dialog');
+  const saleForm = $('#sale-form');
+  const sProd = $('#s-prod');
+  const sColor = $('#s-color');
+  let saleLines = [];
+  let savingSale = false;
+  const FREE = '__free';
+
+  const saleProduct = () => products.find((p) => p.id === sProd.value);
+  const saleTotal = () => saleLines.reduce((t, l) => t + l.unitPrice * l.quantity, 0);
+
+  function syncSaleProduct() {
+    const p = saleProduct();
+    const free = sProd.value === FREE;
+    $('#s-name-wrap').hidden = !free;
+    const colors = p ? B.Catalog.colors(p) : [];
+    $('#s-color-wrap').hidden = !colors.length;
+    sColor.innerHTML = colors.map((c) => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('');
+    $('#s-price').value = p ? p.price : '';
+    $('#s-err-line').textContent = '';
+  }
+  function renderSaleLines() {
+    $('#s-lines').innerHTML = saleLines.length
+      ? saleLines.map((l, i) => `<li><span class="ol-name">${esc(l.name)}${l.color ? ' · ' + esc(l.color) : ''}${l.productId ? '' : ' <small>(fuera de la tienda)</small>'}</span><span class="ol-qty">× ${l.quantity}</span><span class="ol-price">${fmt(l.unitPrice * l.quantity)}</span><button class="btn btn-line sale-x" type="button" data-rm="${i}" aria-label="Quitar ${esc(l.name)}">Quitar</button></li>`).join('')
+      : '<li class="fine">Todavía no agregaste productos.</li>';
+    $('#s-total').textContent = fmt(saleTotal());
+  }
+  function openSaleForm() {
+    saleLines = [];
+    const avail = products.filter((p) => p.active && p.stock > 0).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    sProd.innerHTML = avail.map((p) => `<option value="${esc(p.id)}">${esc(p.name)} — ${fmt(p.price)} (stock ${p.stock})</option>`).join('') + `<option value="${FREE}">Otro producto (no está en la tienda)</option>`;
+    $('#s-name').value = ''; $('#s-qty').value = 1;
+    $('#s-pay').value = 'efectivo'; $('#s-customer').value = ''; $('#s-notes').value = '';
+    $('#s-form-error').textContent = '';
+    syncSaleProduct(); renderSaleLines();
+    if (saleDlg.showModal) saleDlg.showModal(); else saleDlg.setAttribute('open', '');
+    sProd.focus();
+  }
+  const closeSaleForm = () => { if (saleDlg.close) saleDlg.close(); else saleDlg.removeAttribute('open'); };
+  $('#new-sale').addEventListener('click', openSaleForm);
+  $('#s-cancel').addEventListener('click', closeSaleForm);
+  sProd.addEventListener('change', syncSaleProduct);
+
+  $('#s-add').addEventListener('click', () => {
+    const err = $('#s-err-line');
+    err.textContent = '';
+    const p = saleProduct();
+    const free = sProd.value === FREE;
+    const qty = Number($('#s-qty').value);
+    const priceRaw = $('#s-price').value.trim();
+    const price = Number(priceRaw);
+    const name = free ? $('#s-name').value.trim() : (p && p.name);
+    if (free && !name) { err.textContent = 'Escribí el nombre del producto.'; $('#s-name').focus(); return; }
+    if (!free && !p) { err.textContent = 'Elegí un producto.'; return; }
+    if (!Number.isInteger(qty) || qty < 1) { err.textContent = 'La cantidad tiene que ser 1 o más.'; $('#s-qty').focus(); return; }
+    if (priceRaw === '' || !isFinite(price) || price < 0) { err.textContent = 'Ingresá el precio unitario.'; $('#s-price').focus(); return; }
+    if (!free) {
+      const already = saleLines.filter((l) => l.productId === p.id).reduce((t, l) => t + l.quantity, 0);
+      if (already + qty > p.stock) { err.textContent = `Stock insuficiente: quedan ${p.stock - already} de "${p.name}".`; return; }
+    }
+    const color = !free && !$('#s-color-wrap').hidden ? sColor.value : '';
+    saleLines.push({ productId: free ? '' : p.id, name, color, quantity: qty, unitPrice: Math.round(price * 100) / 100 });
+    $('#s-qty').value = 1; $('#s-name').value = '';
+    $('#s-form-error').textContent = '';
+    renderSaleLines();
+  });
+  $('#s-lines').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rm]');
+    if (!b) return;
+    saleLines.splice(Number(b.dataset.rm), 1);
+    renderSaleLines();
+  });
+
+  saleForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (savingSale) return;
+    const formErr = $('#s-form-error');
+    formErr.textContent = '';
+    if (!saleLines.length) { formErr.textContent = 'Agregá al menos un producto con el botón "Agregar a la venta".'; return; }
+    const submitBtn = saleForm.querySelector('button[type="submit"]');
+    savingSale = true; submitBtn.disabled = true;
+    try {
+      const payload = {
+        payment: $('#s-pay').value,
+        customer: $('#s-customer').value.trim(),
+        notes: $('#s-notes').value.trim(),
+        items: saleLines.map((l) => ({ productId: l.productId, name: l.name, color: l.color, quantity: l.quantity, unitPrice: l.unitPrice })),
+      };
+      const { data, error } = await sb.rpc('create_store_sale', { p_payload: payload });
+      if (error) throw error;
+      closeSaleForm();
+      await Promise.all([loadSales(), loadProducts()]);
+      renderSales(); renderProducts();
+      if (B.toast) B.toast('Venta ' + ((data && data.number) || '') + ' registrada.');
+    } catch (err) {
+      const m = (err && err.message) || '';
+      formErr.textContent = /does not exist|schema cache/i.test(m)
+        ? 'Falta ejecutar supabase/ventas.sql en Supabase (una sola vez).'
+        : 'No se pudo registrar la venta: ' + (m || 'error desconocido');
+    } finally {
+      savingSale = false; submitBtn.disabled = false;
     }
   });
 
