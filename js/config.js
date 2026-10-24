@@ -7,7 +7,7 @@ window.BLACK_CONFIG = {
     name: 'Rincón de Sueño Blanquería',
     // ⚠️ REEMPLAZAR: datos de ejemplo. Cargá los reales antes de publicar.
     phone: '+54 358 4158832',                  // REEMPLAZAR
-    whatsapp: '3584158832',                    // REEMPLAZAR (formato internacional, sin + ni espacios)
+    whatsapp: '5493584158832',                    // REEMPLAZAR (formato internacional, sin + ni espacios)
     instagram: 'rincondesueno_',        // REEMPLAZAR
     address: 'Chiclana 169',       // REEMPLAZAR
     city: 'Rio Cuarto, Cordoba',       // REEMPLAZAR
