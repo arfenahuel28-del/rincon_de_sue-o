@@ -145,6 +145,7 @@
         </div>
         <div class="field">
           <label for="p-stock">Stock (unidades)</label>
+          <p class="fine" id="p-stock-help" hidden>Se calcula solo con las cantidades de cada color.</p>
           <input id="p-stock" name="stock" type="number" min="0" step="1" inputmode="numeric" required aria-describedby="p-err-stock">
           <p class="field-error" id="p-err-stock"></p>
         </div>
@@ -155,11 +156,13 @@
       </div>
 
       <div class="field">
-        <span class="label" id="p-colors-label">Colores disponibles <span class="opt">(opcional)</span></span>
-        <p class="fine" id="p-colors-help">Si el producto viene en varios colores, agregalos acá y el cliente elige uno al comprar. El stock es el mismo para todos los colores.</p>
+        <span class="label" id="p-colors-label">Colores y estampas <span class="opt">(opcional)</span></span>
+        <p class="fine" id="p-colors-help">Si el producto viene en varios colores o estampas, agregalos acá con la cantidad que tenés de cada uno. El cliente elige uno al comprar. Para una estampa (ej: "Flores rosas") tocá el cuadradito de cada fila y subí una foto de la estampa. Cuando hay colores, el stock del producto es la suma de todos.</p>
         <div class="color-add">
-          <label class="sr-only" for="p-color-name">Nombre del color</label>
-          <input id="p-color-name" type="text" maxlength="30" placeholder="Ej: Rojo" autocomplete="off" aria-describedby="p-colors-help p-err-color">
+          <label class="sr-only" for="p-color-name">Nombre del color o estampa</label>
+          <input id="p-color-name" type="text" maxlength="30" placeholder="Ej: Rojo o Flores rosas" autocomplete="off" aria-describedby="p-colors-help p-err-color">
+          <label class="sr-only" for="p-color-qty">Cantidad</label>
+          <input id="p-color-qty" class="color-qty" type="number" min="0" step="1" inputmode="numeric" value="1" placeholder="Cant.">
           <label class="sr-only" for="p-color-hex">Tono del color</label>
           <input id="p-color-hex" class="color-pick" type="color" value="#c0392b">
           <button class="btn btn-line" type="button" id="p-color-add">Agregar</button>

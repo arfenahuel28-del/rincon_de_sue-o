@@ -29,7 +29,7 @@
       address: r.delivery_address || '',
       notes: r.notes || '',
     },
-    items: (r.order_items || []).map((i) => ({ name: i.name, quantity: i.quantity, subtotal: Number(i.subtotal) })),
+    items: (r.order_items || []).map((i) => ({ name: i.name, color: i.color || '', quantity: i.quantity, subtotal: Number(i.subtotal) })),
     total: Number(r.total),
     status: r.status,
     payment: { status: r.payment_status },
@@ -215,28 +215,53 @@
   const colorList = $('#p-color-list');
   const colorErr = $('#p-err-color');
 
+  const colorQtyEl = $('#p-color-qty');
+  const stockEl = $('#p-stock');
+
+  /* Con colores, el stock del producto es la suma de las cantidades de cada color */
+  function syncStock() {
+    const has = formColors.length > 0;
+    stockEl.readOnly = has;
+    $('#p-stock-help').hidden = !has;
+    if (has) stockEl.value = formColors.reduce((n, c) => n + (Number.isInteger(c.stock) ? c.stock : 0), 0);
+  }
   function renderFormColors() {
-    colorList.innerHTML = formColors.map((c, i) => `<li class="color-chip"><span class="swatch-dot sm" style="--sw:${esc(c.hex)}" aria-hidden="true"></span><span>${esc(c.name)}</span><button class="color-chip-x" type="button" data-rm-color="${i}" aria-label="Quitar el color ${esc(c.name)}">×</button></li>`).join('');
+    colorList.innerHTML = formColors.map((c, i) => `
+      <li class="color-row">
+        <label class="color-photo${c.image ? ' has-img' : ''}" title="${c.image ? 'Cambiar la foto de la estampa' : 'Subir foto de la estampa'}">
+          <input type="file" accept="image/*" data-color-file="${i}" aria-label="Foto de la estampa de ${esc(c.name)}">
+          <span class="swatch-dot" style="${c.image ? `--sw:${esc(c.hex)};--img:url('${esc(c.image)}')` : `--sw:${esc(c.hex)}`}" aria-hidden="true"></span>
+          <small>${c.image ? 'Cambiar' : '+ Foto'}</small>
+        </label>
+        <span class="color-name">${esc(c.name)}</span>
+        <span class="color-qty-wrap"><label class="sr-only" for="cq-${i}">Cantidad de ${esc(c.name)}</label><input id="cq-${i}" class="color-qty" type="number" min="0" step="1" inputmode="numeric" data-color-qty="${i}" value="${Number.isInteger(c.stock) ? c.stock : ''}" placeholder="Cant."><small>u.</small></span>
+        ${c.image ? `<button class="link-btn color-nophoto" type="button" data-color-nophoto="${i}" aria-label="Quitar la foto de ${esc(c.name)}">Quitar foto</button>` : ''}
+        <button class="color-chip-x" type="button" data-rm-color="${i}" aria-label="Quitar ${esc(c.name)}">×</button>
+      </li>`).join('');
+    syncStock();
   }
   function addFormColor() {
     let name = colorNameEl.value.trim().replace(/\s+/g, ' ');
     name = name.charAt(0).toUpperCase() + name.slice(1);
+    const qty = Number(colorQtyEl.value);
     let err = '';
-    if (name.length < 2) err = 'Escribí el nombre del color, por ejemplo "Rojo".';
+    if (name.length < 2) err = 'Escribí el nombre del color o de la estampa, por ejemplo "Rojo".';
     else if (name.length > 30) err = 'El nombre puede tener hasta 30 letras.';
     else if (formColors.some((c) => norm(c.name) === norm(name))) err = 'Ese color ya está en la lista.';
     else if (formColors.length >= 12) err = 'Podés cargar hasta 12 colores por producto.';
+    else if (colorQtyEl.value === '' || !Number.isInteger(qty) || qty < 0) err = 'Indicá cuántas unidades tenés de ese color (puede ser 0).';
     colorErr.textContent = err;
-    if (err) { colorNameEl.setAttribute('aria-invalid', 'true'); colorNameEl.focus(); return; }
-    colorNameEl.removeAttribute('aria-invalid');
-    formColors.push({ name, hex: /^#[0-9a-f]{6}$/i.test(colorHexEl.value) ? colorHexEl.value.toLowerCase() : '#cccccc' });
+    if (err) { (/unidades/.test(err) ? colorQtyEl : colorNameEl).setAttribute('aria-invalid', 'true'); (/unidades/.test(err) ? colorQtyEl : colorNameEl).focus(); return; }
+    colorNameEl.removeAttribute('aria-invalid'); colorQtyEl.removeAttribute('aria-invalid');
+    formColors.push({ name, hex: /^#[0-9a-f]{6}$/i.test(colorHexEl.value) ? colorHexEl.value.toLowerCase() : '#cccccc', stock: qty, image: '' });
     renderFormColors();
     colorNameEl.value = '';
+    colorQtyEl.value = 1;
     hexTouched = false;
     colorNameEl.focus();
   }
   $('#p-color-add').addEventListener('click', addFormColor);
-  colorNameEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addFormColor(); } });
+  [colorNameEl, colorQtyEl].forEach((el) => el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addFormColor(); } }));
   colorNameEl.addEventListener('input', () => {
     colorErr.textContent = '';
     colorNameEl.removeAttribute('aria-invalid');
@@ -245,16 +270,39 @@
   });
   colorHexEl.addEventListener('input', () => { hexTouched = true; });
   colorList.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-rm-color]');
-    if (!b) return;
-    formColors.splice(Number(b.dataset.rmColor), 1);
-    renderFormColors();
-    colorNameEl.focus();
+    const rm = e.target.closest('[data-rm-color]');
+    if (rm) {
+      formColors.splice(Number(rm.dataset.rmColor), 1);
+      renderFormColors();
+      colorNameEl.focus();
+      return;
+    }
+    const np = e.target.closest('[data-color-nophoto]');
+    if (np) { formColors[Number(np.dataset.colorNophoto)].image = ''; renderFormColors(); }
+  });
+  colorList.addEventListener('input', (e) => {
+    const q = e.target.closest('[data-color-qty]');
+    if (!q) return;
+    const n = q.value === '' ? NaN : Number(q.value);
+    formColors[Number(q.dataset.colorQty)].stock = Number.isInteger(n) && n >= 0 ? n : undefined;
+    q.removeAttribute('aria-invalid');
+    syncStock();
+  });
+  colorList.addEventListener('change', async (e) => {
+    const f = e.target.closest('[data-color-file]');
+    if (!f || !f.files[0]) return;
+    const i = Number(f.dataset.colorFile);
+    try {
+      formColors[i].image = await toDataURL(f.files[0], 240, true);   // cuadradito de 240 px; se sube al guardar
+      renderFormColors();
+    } catch (err) {
+      colorErr.textContent = 'No pudimos leer esa imagen. Probá con otra (JPG o PNG).';
+    }
   });
   /* El dibujo del producto conserva su forma y se guarda junto con los colores */
   function productArt() {
     const base = Object.assign({}, (editing && editing.art) || { shape: 'folded', color: '#b9a3b0' });
-    if (formColors.length) base.colors = formColors.map((c) => ({ name: c.name, hex: c.hex })); else delete base.colors;
+    if (formColors.length) base.colors = formColors.map((c) => { const o = { name: c.name, hex: c.hex, stock: c.stock }; if (c.image) o.image = c.image; return o; }); else delete base.colors;
     return base;
   }
 
@@ -280,9 +328,10 @@
     $('#p-form-error').textContent = '';
     $('#p-img-msg').textContent = 'Sin foto se muestra un dibujo genérico.';
     $('#p-file').value = '';
-    formColors = p && Array.isArray(p.colors) ? p.colors.map((c) => ({ name: c.name, hex: c.hex })) : [];
+    formColors = p && Array.isArray(p.colors) ? p.colors.map((c) => ({ name: c.name, hex: c.hex, stock: Number.isInteger(c.stock) ? c.stock : undefined, image: c.image || '' })) : [];
     renderFormColors();
     colorNameEl.value = '';
+    colorQtyEl.value = 1;
     colorHexEl.value = '#c0392b';
     hexTouched = false;
     colorErr.textContent = '';
@@ -307,7 +356,7 @@
   $('#p-cancel').addEventListener('click', closeForm);
 
   /* Foto: se reduce a 900 px para que cargue rápido en el celular del cliente */
-  function toDataURL(file, max = 900) {
+  function toDataURL(file, max = 900, square = false) {
     return new Promise((resolve, reject) => {
       const r = new FileReader();
       r.onerror = reject;
@@ -315,11 +364,19 @@
         const img = new Image();
         img.onerror = reject;
         img.onload = () => {
-          const s = Math.min(1, max / Math.max(img.width, img.height));
           const c = document.createElement('canvas');
+          const ctx = c.getContext('2d');
+          if (square) {
+            /* recorte cuadrado desde el centro */
+            const side = Math.min(img.width, img.height);
+            c.width = c.height = Math.min(max, side);
+            ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, c.width, c.height);
+            resolve(c.toDataURL('image/jpeg', 0.8));
+            return;
+          }
+          const s = Math.min(1, max / Math.max(img.width, img.height));
           c.width = Math.round(img.width * s);
           c.height = Math.round(img.height * s);
-          const ctx = c.getContext('2d');
           ctx.fillStyle = '#fff';
           ctx.fillRect(0, 0, c.width, c.height);
           ctx.drawImage(img, 0, 0, c.width, c.height);
@@ -351,8 +408,8 @@
     return id;
   }
 
-  async function uploadImage(id) {
-    const blob = await (await fetch(imageData)).blob();
+  async function uploadImage(id, data = imageData) {
+    const blob = await (await fetch(data)).blob();
     const path = `${id}-${Date.now()}.jpg`;
     const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000' });
     if (error) throw error;
@@ -366,6 +423,8 @@
     const name = form.elements.name.value.trim();
     const price = Number(form.elements.price.value);
     const stock = Number(form.elements.stock.value);
+    /* Con colores, cada uno necesita su cantidad */
+    const noQty = formColors.findIndex((c) => !Number.isInteger(c.stock) || c.stock < 0);
     const errs = {
       name: name.length < 2 ? 'Escribí el nombre del producto.' : '',
       price: form.elements.price.value === '' || !Number.isInteger(price) || price < 0 ? 'Ingresá un precio entero, en pesos.' : '',
@@ -377,6 +436,11 @@
       if (errs[k]) { form.elements[k].setAttribute('aria-invalid', 'true'); first = first || form.elements[k]; } else form.elements[k].removeAttribute('aria-invalid');
     });
     if (first) { first.focus(); return; }
+    if (noQty >= 0 && !(colorNameEl.value.trim())) {
+      colorErr.textContent = `Indicá cuántas unidades hay de "${formColors[noQty].name}" (puede ser 0).`;
+      const q = $('#cq-' + noQty); if (q) { q.setAttribute('aria-invalid', 'true'); q.focus(); }
+      return;
+    }
     if (!form.elements.category.value) {
       $('#p-form-error').textContent = 'Primero creá una categoría en la pestaña "Categorías".';
       return;
@@ -394,13 +458,17 @@
       const id = editing ? editing.id : uniqueId(name);
       let imageUrl = imageData;
       if (imageData && imageData.startsWith('data:')) imageUrl = await uploadImage(id);
+      /* Fotos de estampas nuevas: se suben y quedan guardadas con su color */
+      for (let i = 0; i < formColors.length; i++) {
+        if (formColors[i].image && formColors[i].image.startsWith('data:')) formColors[i].image = await uploadImage(`estampa-${id}-${slug(formColors[i].name)}`, formColors[i].image);
+      }
 
       const row = {
         id,
         name,
         description: form.elements.description.value.trim(),
         price,
-        stock,
+        stock: formColors.length ? formColors.reduce((n, c) => n + c.stock, 0) : stock,
         sold_out: form.elements.soldOut.checked,
         category_id: form.elements.category.value,
         featured: form.elements.featured.checked,
@@ -622,7 +690,7 @@
             <span class="adm-badge ${statusClass(o.status)}" data-status-badge>${esc(ORDER_STATUS[o.status] || o.status)}</span>
           </summary>
           <div class="adm-o-body">
-            <ul class="order-lines">${o.items.map((i) => `<li><span class="ol-name">${esc(i.name)}</span><span class="ol-qty">× ${i.quantity}</span><span class="ol-price">${fmt(i.subtotal)}</span></li>`).join('')}</ul>
+            <ul class="order-lines">${o.items.map((i) => `<li><span class="ol-name">${esc(i.name)}${i.color ? ' · ' + esc(i.color) : ''}</span><span class="ol-qty">× ${i.quantity}</span><span class="ol-price">${fmt(i.subtotal)}</span></li>`).join('')}</ul>
             <p class="order-total"><span>Total</span><strong>${fmt(o.total)}</strong></p>
             <dl class="facts">
               <div><dt>Cliente</dt><dd>${esc(o.customer.name)} · ${esc(o.customer.phone)}<br>${esc(o.customer.email)}</dd></div>
@@ -702,7 +770,7 @@
       createdAt: o.createdAt,
       who: o.customer.name,
       total: o.total,
-      items: o.items.map((i) => ({ name: i.name, color: '', quantity: i.quantity, subtotal: i.subtotal })),
+      items: o.items.map((i) => ({ name: i.name, color: i.color || '', quantity: i.quantity, subtotal: i.subtotal })),
       statusLabel: dead ? (ORDER_STATUS[o.status] || o.status) : (paid ? 'Cobrada' : 'Por cobrar'),
       counted: !dead && paid,
       pending: !dead && !paid,
@@ -850,7 +918,9 @@
     $('#s-name-wrap').hidden = !free;
     const colors = p ? B.Catalog.colors(p) : [];
     $('#s-color-wrap').hidden = !colors.length;
-    sColor.innerHTML = colors.map((c) => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('');
+    sColor.innerHTML = colors.map((c) => `<option value="${esc(c.name)}"${Number.isInteger(c.stock) && c.stock <= 0 ? ' disabled' : ''}>${esc(c.name)}${Number.isInteger(c.stock) ? ` (quedan ${c.stock})` : ''}</option>`).join('');
+    const firstOk = Array.from(sColor.options).find((o) => !o.disabled);
+    if (firstOk) sColor.value = firstOk.value;
     $('#s-price').value = p ? p.price : '';
     $('#s-err-line').textContent = '';
   }
@@ -890,8 +960,11 @@
     if (!Number.isInteger(qty) || qty < 1) { err.textContent = 'La cantidad tiene que ser 1 o más.'; $('#s-qty').focus(); return; }
     if (priceRaw === '' || !isFinite(price) || price < 0) { err.textContent = 'Ingresá el precio unitario.'; $('#s-price').focus(); return; }
     if (!free) {
-      const already = saleLines.filter((l) => l.productId === p.id).reduce((t, l) => t + l.quantity, 0);
-      if (already + qty > p.stock) { err.textContent = `Stock insuficiente: quedan ${p.stock - already} de "${p.name}".`; return; }
+      const colorPicked = !$('#s-color-wrap').hidden ? sColor.value : '';
+      const cs = colorPicked ? B.Catalog.colorStock(p, colorPicked) : null;
+      const already = saleLines.filter((l) => l.productId === p.id && (cs === null || l.color === colorPicked)).reduce((t, l) => t + l.quantity, 0);
+      const have = cs !== null ? cs : p.stock;
+      if (already + qty > have) { err.textContent = `Stock insuficiente: quedan ${have - already} de "${p.name}"${cs !== null ? ` en ${colorPicked}` : ''}.`; return; }
     }
     const color = !free && !$('#s-color-wrap').hidden ? sColor.value : '';
     saleLines.push({ productId: free ? '' : p.id, name, color, quantity: qty, unitPrice: Math.round(price * 100) / 100 });

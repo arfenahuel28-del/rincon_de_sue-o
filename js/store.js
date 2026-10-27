@@ -39,7 +39,13 @@
      art.colors = [{ name: 'Rojo', hex: '#c0392b' }, ...], así no hace falta cambiar la base. */
   const cleanColors = (art) => (art && Array.isArray(art.colors) ? art.colors : [])
     .filter((c) => c && typeof c.name === 'string' && c.name.trim())
-    .map((c) => ({ name: c.name.trim().slice(0, 30), hex: /^#[0-9a-f]{6}$/i.test(c.hex || '') ? c.hex : '#cccccc' }));
+    .map((c) => {
+      const out = { name: c.name.trim().slice(0, 30), hex: /^#[0-9a-f]{6}$/i.test(c.hex || '') ? c.hex : '#cccccc' };
+      /* stock: unidades de ese color (opcional). image: foto de la estampa (opcional, solo https o ruta del sitio). */
+      if (Number.isInteger(c.stock) && c.stock >= 0) out.stock = c.stock;
+      if (typeof c.image === 'string' && /^(https:\/\/|assets\/)/.test(c.image) && c.image.length <= 500) out.image = c.image;
+      return out;
+    });
 
   /* Fila de la base (snake_case) → producto de la web (camelCase) */
   const rowToProduct = (r) => ({
@@ -137,6 +143,8 @@
     categoryName(id) { const c = this.categories().find((x) => x.id === id); return c ? c.name : ''; },
     isAvailable(p) { return !p.soldOut && p.stock > 0; },
     colors(p) { return p && Array.isArray(p.colors) ? p.colors : []; },
+    colorStock(p, name) { const c = this.colors(p).find((x) => x.name === name); return c && Number.isInteger(c.stock) ? c.stock : null; },
+    colorImage(p, name) { const c = this.colors(p).find((x) => x.name === name); return c && c.image ? c.image : ''; },
     colorHex(p, name) { const c = this.colors(p).find((x) => x.name === name); return c ? c.hex : ''; },
   };
 
@@ -157,6 +165,15 @@
     },
     count() { return this._read().reduce((n, i) => n + i.qty, 0); },
     qtyOf(id, color = '') { const it = this._read().find((i) => i.id === id && i.color === color); return it ? it.qty : 0; },
+    /* Unidades máximas que se pueden tener en una línea (producto + color). Si el color tiene stock propio manda ese; si no, el stock general. */
+    limitOf(id, color = '') {
+      const p = Catalog.get(id);
+      if (!p) return 0;
+      const cs = Catalog.colorStock(p, color);
+      if (cs !== null) return cs;
+      const others = this._read().filter((i) => i.id === id && i.color !== color && Catalog.colorStock(p, i.color) === null).reduce((n, i) => n + i.qty, 0);
+      return Math.max(0, p.stock - others);
+    },
     totalOf(id) { return this._read().filter((i) => i.id === id).reduce((n, i) => n + i.qty, 0); },
     lines() {
       return this._read()
@@ -175,9 +192,11 @@
       if (!colors.length) color = '';
       const items = this._read();
       const it = items.find((i) => i.id === id && i.color === color);
-      const total = items.filter((i) => i.id === id).reduce((n, i) => n + i.qty, 0);
-      if (total >= p.stock) return { ok: false, reason: 'max' };
-      const inc = Math.min(qty, p.stock - total);
+      const have = it ? it.qty : 0;
+      const room = this.limitOf(id, color) - have;
+      if (Catalog.colorStock(p, color) === 0) return { ok: false, reason: 'sin_stock' };
+      if (room <= 0) return { ok: false, reason: 'max' };
+      const inc = Math.min(qty, room);
       if (it) it.qty += inc; else items.push({ id, qty: inc, color });
       this._write(items);
       return { ok: true, qty: it ? it.qty : inc };
@@ -189,8 +208,7 @@
       const items = this._read();
       const it = items.find((i) => i.id === id && i.color === color);
       if (!it) return;
-      const others = items.filter((i) => i.id === id && i !== it).reduce((n, i) => n + i.qty, 0);
-      const next = Math.min(qty, p.stock - others);
+      const next = Math.min(qty, this.limitOf(id, color));
       if (next <= 0) return this.remove(id, color);
       it.qty = next;
       this._write(items);
@@ -210,11 +228,14 @@
           if (!color) { notes.push(`${p.name} ahora se vende en varios colores: lo quitamos del carrito. Volvé a agregarlo eligiendo el color.`); return; }
           if (!colors.some((c) => c.name === color)) { notes.push(`El color ${color} de ${p.name} ya no está disponible y lo quitamos del carrito.`); return; }
         } else color = '';
-        const left = p.stock - (used[i.id] || 0);
-        if (left <= 0) { notes.push(`${p.name} ya no tiene stock suficiente y lo quitamos del carrito.`); return; }
+        const cs = Catalog.colorStock(p, color);
+        const key = cs !== null ? i.id + '|' + color : i.id;
+        const left = (cs !== null ? cs : p.stock) - (used[key] || 0);
+        const label = p.name + (color ? ` (${color})` : '');
+        if (left <= 0) { notes.push(`${label} ya no tiene stock suficiente y lo quitamos del carrito.`); return; }
         const qty = Math.min(i.qty, left);
-        if (qty < i.qty) notes.push(`Ajustamos ${p.name} al stock disponible (${p.stock}).`);
-        used[i.id] = (used[i.id] || 0) + qty;
+        if (qty < i.qty) notes.push(`Ajustamos ${label} al stock disponible (${left}).`);
+        used[key] = (used[key] || 0) + qty;
         const same = out.find((o) => o.id === i.id && o.color === color);
         if (same) same.qty += qty; else out.push({ id: i.id, qty, color });
       });

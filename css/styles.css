@@ -576,3 +576,28 @@ body.has-bar .toast { bottom: 96px; }
   .sale-lines .sale-x { grid-column: auto; }
 }
 #sale-dialog .order-total { margin-bottom: 16px; }
+
+/* ---------- Variantes con foto de estampa y stock por color ---------- */
+.swatch.has-img .swatch-dot, .swatch-dot.has-img { border-radius: 8px; width: 34px; height: 34px; background: var(--img) center / cover no-repeat, var(--sw, #ccc); }
+.swatch-dot.sm.has-img { width: 22px; height: 22px; border-radius: 5px; }
+.swatch.is-out { cursor: not-allowed; opacity: .45; }
+.swatch.is-out input { cursor: not-allowed; }
+.swatch.is-out .swatch-dot::after { content: ""; display: block; width: 100%; height: 100%; border-radius: inherit; background: linear-gradient(to top right, transparent calc(50% - 1px), var(--bad) calc(50% - 1px), var(--bad) calc(50% + 1px), transparent calc(50% + 1px)); }
+
+/* Admin: filas de colores/estampas con cantidad y foto */
+.color-add .color-qty, .color-row .color-qty { width: 84px; min-width: 0; flex: none; }
+.field .color-add input.color-qty { width: 84px; }
+.color-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.color-row { display: flex; align-items: center; gap: 10px; padding: 6px 4px 6px 8px; border: 2px solid var(--line); border-radius: 14px; background: #fff; }
+.color-photo { position: relative; display: grid; justify-items: center; gap: 1px; width: 56px; min-height: 56px; flex: none; cursor: pointer; }
+.color-photo input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.color-photo .swatch-dot { width: 34px; height: 34px; border-radius: 8px; background: var(--img) center / cover no-repeat, var(--sw, #ccc); }
+.color-photo:not(.has-img) .swatch-dot { border-radius: 50%; }
+.color-photo small { font-size: .7rem; color: var(--muted); font-weight: 700; }
+.color-photo:focus-within .swatch-dot { outline: 3px solid var(--accent); outline-offset: 3px; }
+.color-name { flex: 1 1 auto; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+.color-qty-wrap { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.color-row .color-qty { height: 44px; padding: 0 8px; text-align: center; }
+.color-row .color-chip-x { flex: none; margin: 0; }
+@media (max-width: 420px) { .color-row { flex-wrap: wrap; } .color-name { flex-basis: calc(100% - 80px); } }
+.color-nophoto { flex: none; min-height: 44px; padding: 0 4px; font-size: .8rem; }

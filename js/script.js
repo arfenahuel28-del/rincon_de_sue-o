@@ -29,6 +29,9 @@
 
   /* Selector de color (solo si el producto tiene colores cargados). Nadie queda preseleccionado:
      el cliente tiene que elegir, así no se compra un color por error. */
+  /* Estilo de la muestra: color liso, o la foto de la estampa si la cargaron */
+  const swatchStyle = (hex, img) => `--sw:${esc(hex)}${img ? `;--img:url('${esc(img)}')` : ''}`;
+
   function colorPickerHTML(p) {
     const colors = Catalog.colors(p);
     if (!colors.length) return '';
@@ -36,7 +39,10 @@
         <fieldset class="p-colors">
           <legend class="p-colors-legend">Color: <span class="p-colors-pick" data-color-label>Elegí uno</span></legend>
           <div class="p-colors-row">
-            ${colors.map((c) => `<label class="swatch" title="${esc(c.name)}"><input type="radio" name="color-${esc(p.id)}" value="${esc(c.name)}" data-color-pick data-hex="${esc(c.hex)}"><span class="swatch-dot" style="--sw:${esc(c.hex)}" aria-hidden="true"></span><span class="sr-only">${esc(c.name)}</span></label>`).join('')}
+            ${colors.map((c) => {
+              const out = Number.isInteger(c.stock) && c.stock <= 0;
+              return `<label class="swatch${c.image ? ' has-img' : ''}${out ? ' is-out' : ''}" title="${esc(c.name)}${out ? ' (agotado)' : ''}"><input type="radio" name="color-${esc(p.id)}" value="${esc(c.name)}" data-color-pick data-hex="${esc(c.hex)}"${Number.isInteger(c.stock) ? ` data-stock="${c.stock}"` : ''}${out ? ' disabled' : ''}><span class="swatch-dot" style="${swatchStyle(c.hex, c.image)}" aria-hidden="true"></span><span class="sr-only">${esc(c.name)}${out ? ' (agotado)' : ''}</span></label>`;
+            }).join('')}
           </div>
         </fieldset>`;
   }
@@ -112,7 +118,10 @@
     const box = card.querySelector('.p-colors');
     if (box) box.classList.remove('is-missing');
     const label = card.querySelector('[data-color-label]');
-    if (label) label.textContent = input.value;
+    if (label) {
+      const st = input.dataset.stock === undefined ? null : Number(input.dataset.stock);
+      label.textContent = input.value + (st !== null && st > 0 && st <= 5 ? (st === 1 ? ' · última unidad' : ` · quedan ${st}`) : '');
+    }
     const art = card.querySelector('.p-art');
     if (art && input.dataset.hex) art.style.setProperty('--c', input.dataset.hex);
   });
@@ -272,7 +281,7 @@
                 <div class="c-thumb">${mediaHTML(l.product, Catalog.colorHex(l.product, l.color))}</div>
                 <div>
                   <p class="c-name">${esc(l.product.name)}</p>
-                  ${l.color ? `<p class="c-color"><span class="swatch-dot sm" style="--sw:${esc(Catalog.colorHex(l.product, l.color))}" aria-hidden="true"></span>Color: ${esc(l.color)}</p>` : ''}
+                  ${l.color ? `<p class="c-color"><span class="swatch-dot sm${Catalog.colorImage(l.product, l.color) ? ' has-img' : ''}" style="${swatchStyle(Catalog.colorHex(l.product, l.color), Catalog.colorImage(l.product, l.color))}" aria-hidden="true"></span>Color: ${esc(l.color)}</p>` : ''}
                   <button class="link-btn" type="button" data-remove="${esc(l.product.id)}" data-color="${esc(l.color)}">Quitar<span class="sr-only"> ${esc(l.product.name)}${l.color ? ` color ${esc(l.color)}` : ''} del carrito</span></button>
                 </div>
               </div></td>
@@ -280,7 +289,7 @@
                 <div class="stepper" role="group" aria-label="Cantidad de ${esc(l.product.name)}${l.color ? ` color ${esc(l.color)}` : ''}">
                   <button type="button" data-qty="${esc(l.product.id)}" data-color="${esc(l.color)}" data-act="dec" aria-label="Restar uno"><svg class="ico" aria-hidden="true"><use href="#i-minus"/></svg></button>
                   <output aria-live="polite">${l.qty}</output>
-                  <button type="button" data-qty="${esc(l.product.id)}" data-color="${esc(l.color)}" data-act="inc" aria-label="Sumar uno"${Cart.totalOf(l.product.id) >= l.product.stock ? ' disabled' : ''}><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button>
+                  <button type="button" data-qty="${esc(l.product.id)}" data-color="${esc(l.color)}" data-act="inc" aria-label="Sumar uno"${l.qty >= Cart.limitOf(l.product.id, l.color) ? ' disabled' : ''}><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button>
                 </div>
               </td>
               <td class="c-price" data-label="Precio">${fmt(l.unitPrice)}</td>
