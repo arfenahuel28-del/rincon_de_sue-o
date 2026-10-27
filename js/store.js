@@ -47,6 +47,24 @@
       return out;
     });
 
+  /* Fotos del producto: art.images = [url, ...] (la primera es la principal). Se acepta solo https o rutas del sitio. */
+  const okUrl = (u) => typeof u === 'string' && /^(https:\/\/|assets\/)/.test(u) && u.length <= 500;
+  const cleanImages = (art, main) => {
+    const list = (art && Array.isArray(art.images) ? art.images : []).filter(okUrl);
+    if (okUrl(main) && !list.includes(main)) list.unshift(main);
+    return list.filter((u, i) => list.indexOf(u) === i).slice(0, 8);
+  };
+  /* Subcategorías del producto: art.attrs = { idDelGrupo: [idDelValor, ...] } */
+  const cleanAttrs = (art) => {
+    const out = {};
+    const src = art && art.attrs && typeof art.attrs === 'object' && !Array.isArray(art.attrs) ? art.attrs : {};
+    Object.keys(src).forEach((g) => {
+      const vals = Array.isArray(src[g]) ? src[g].filter((v) => typeof v === 'string') : [];
+      if (vals.length) out[g] = vals;
+    });
+    return out;
+  };
+
   /* Fila de la base (snake_case) → producto de la web (camelCase) */
   const rowToProduct = (r) => ({
     id: r.id,
@@ -58,7 +76,9 @@
     category: r.category_id,
     featured: !!r.featured,
     active: r.active !== false,
-    image: r.image_url || '',
+    image: cleanImages(r.art, r.image_url)[0] || r.image_url || '',
+    images: cleanImages(r.art, r.image_url),
+    attrs: cleanAttrs(r.art),
     art: r.art && r.art.shape ? r.art : { shape: 'folded', color: '#b9a3b0' },
     colors: cleanColors(r.art),
   });
@@ -119,6 +139,15 @@
           if (c.error || p.error) throw (c.error || p.error);
           window.BLACK_CATEGORIES = c.data.map((x) => ({ id: x.id, name: x.name, icon: x.icon }));
           window.BLACK_PRODUCTS = p.data.map(rowToProduct);
+          /* Subcategorías: si todavía no se creó la tabla, la tienda funciona igual sin filtros */
+          try {
+            const [g, v] = await Promise.all([
+              sb.from('attribute_groups').select('*').order('sort_order'),
+              sb.from('attribute_values').select('*').order('sort_order'),
+            ]);
+            if (g.error || v.error) throw (g.error || v.error);
+            window.BLACK_ATTRS = g.data.map((x) => ({ id: x.id, name: x.name, values: v.data.filter((y) => y.group_id === x.id).map((y) => ({ id: y.id, name: y.name })) }));
+          } catch (e2) { window.BLACK_ATTRS = []; }
         } catch (e) {
           console.warn('No se pudo leer el catálogo de Supabase; se usa el catálogo local.', e);
         }
@@ -139,6 +168,16 @@
     },
     categories() { return window.BLACK_CATEGORIES || []; },
     products() { return (window.BLACK_PRODUCTS || []).filter((p) => p.active !== false); },
+    /* Subcategorías (grupos con sus valores). Solo cuentan los grupos que tienen valores. */
+    attrGroups() { return (window.BLACK_ATTRS || []).filter((g) => g.values && g.values.length); },
+    /* Las del producto, listas para mostrar: [{ id, name, values: [{id, name}] }] */
+    attrsOf(p) {
+      const mine = (p && p.attrs) || {};
+      return this.attrGroups()
+        .map((g) => ({ id: g.id, name: g.name, values: g.values.filter((v) => (mine[g.id] || []).includes(v.id)) }))
+        .filter((g) => g.values.length);
+    },
+    images(p) { return p && Array.isArray(p.images) && p.images.length ? p.images : (p && p.image ? [p.image] : []); },
     get(id) { return this.products().find((p) => p.id === id); },
     categoryName(id) { const c = this.categories().find((x) => x.id === id); return c ? c.name : ''; },
     isAvailable(p) { return !p.soldOut && p.stock > 0; },

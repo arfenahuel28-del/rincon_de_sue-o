@@ -52,10 +52,10 @@
     const avail = Catalog.isAvailable(p);
     return `
     <article class="p-card${avail ? '' : ' is-out'}">
-      <div class="p-media">${mediaHTML(p)}</div>
+      <a class="p-media" href="producto.html?id=${encodeURIComponent(p.id)}" tabindex="-1" aria-hidden="true">${mediaHTML(p)}</a>
       <div class="p-body">
         <p class="p-cat">${esc(Catalog.categoryName(p.category))}</p>
-        <h3 class="p-name">${esc(p.name)}</h3>
+        <h3 class="p-name"><a href="producto.html?id=${encodeURIComponent(p.id)}">${esc(p.name)}</a></h3>
         <p class="p-desc">${esc(p.description)}</p>
         <div class="p-meta">
           <span class="p-price">${fmt(p.price)}</span>
@@ -71,7 +71,7 @@
 
   /* Imágenes que no cargan: se quita la foto y queda el dibujo del producto */
   document.addEventListener('error', (e) => {
-    if (e.target && e.target.classList && e.target.classList.contains('p-photo')) e.target.remove();
+    if (e.target && e.target.classList && (e.target.classList.contains('p-photo') || e.target.classList.contains('pd-thumb-img'))) e.target.remove();
   }, true);
 
   /* ---------- Compartir catálogo (página de productos) ---------- */
@@ -85,12 +85,13 @@
 
   /* ---------- Agregar al carrito (desde cualquier página) ---------- */
   document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-add]');
+    const btn = e.target.closest('[data-add],[data-buy]');
     if (!btn) return;
-    const p = Catalog.get(btn.dataset.add);
+    const pid = btn.dataset.add || btn.dataset.buy;
+    const p = Catalog.get(pid);
     let color = '';
     if (p && Catalog.colors(p).length) {
-      const card = btn.closest('.p-card');
+      const card = btn.closest('.p-card, [data-pd]');
       const picked = card && card.querySelector('input[data-color-pick]:checked');
       if (!picked) {
         const box = card && card.querySelector('.p-colors');
@@ -104,7 +105,9 @@
       }
       color = picked.value;
     }
-    const r = Cart.add(btn.dataset.add, 1, color);
+    const qtyOut = btn.closest('[data-pd]') && $('[data-qty-out]', btn.closest('[data-pd]'));
+    const r = Cart.add(pid, qtyOut ? Math.max(1, Number(qtyOut.textContent) || 1) : 1, color);
+    if ((r.ok || r.reason === 'max') && btn.hasAttribute('data-buy')) { location.href = 'carrito.html'; return; }
     if (r.ok) B.toast(`${p.name}${color ? ` (${color})` : ''} agregado al carrito.`, { href: 'carrito.html', label: 'Ver carrito' });
     else B.toast(r.reason === 'max' ? 'Ya tenés en el carrito todo el stock disponible.' : r.reason === 'color' ? 'Elegí un color para agregarlo.' : 'Este producto está sin stock.');
   });
@@ -113,7 +116,7 @@
   document.addEventListener('change', (e) => {
     const input = e.target.closest && e.target.closest('input[data-color-pick]');
     if (!input) return;
-    const card = input.closest('.p-card');
+    const card = input.closest('.p-card, [data-pd]');
     if (!card) return;
     const box = card.querySelector('.p-colors');
     if (box) box.classList.remove('is-missing');
@@ -164,6 +167,7 @@
     const state = {
       cat: validCat(params.get('categoria')) ? params.get('categoria') : 'all',
       q: params.get('q') || '',
+      vals: new Set((params.get('f') || '').split(',').filter(Boolean)),
       sort: ['precio-asc', 'precio-desc', 'nombre'].includes(params.get('orden')) ? params.get('orden') : 'destacados',
     };
     search.value = state.q;
@@ -177,9 +181,29 @@
       chips.innerHTML = items.map((c) => `<button type="button" class="chip${state.cat === c.id ? ' is-active' : ''}" data-cat="${esc(c.id)}" aria-pressed="${state.cat === c.id}">${esc(c.name)} <span>${countBy(c.id)}</span></button>`).join('');
     }
 
+    /* Subcategorías: dentro de un mismo grupo alcanza con cumplir una (ej. algodón O poliéster); entre grupos se cumplen todos (ej. algodón Y queen) */
+    const matchesAttrs = (p) => Catalog.attrGroups().every((g) => {
+      const picked = g.values.filter((v) => state.vals.has(v.id));
+      return !picked.length || picked.some((v) => ((p.attrs || {})[g.id] || []).includes(v.id));
+    });
+    const attrBox = $('#attr-filters');
+    function renderAttrs() {
+      if (!attrBox) return;
+      const groups = Catalog.attrGroups()
+        .map((g) => ({ g, values: g.values.map((v) => ({ v, n: all.filter((p) => ((p.attrs || {})[g.id] || []).includes(v.id)).length })).filter((x) => x.n > 0) }))
+        .filter((x) => x.values.length);
+      attrBox.innerHTML = groups.map(({ g, values }) => `
+        <div class="filter-row">
+          <span class="filter-label" id="fl-${esc(g.id)}">${esc(g.name)}</span>
+          <div class="chips" role="group" aria-labelledby="fl-${esc(g.id)}">
+            ${values.map(({ v, n }) => `<button type="button" class="chip${state.vals.has(v.id) ? ' is-active' : ''}" data-val="${esc(v.id)}" aria-pressed="${state.vals.has(v.id)}">${esc(v.name)} <span>${n}</span></button>`).join('')}
+          </div>
+        </div>`).join('') + (groups.length && state.vals.size ? '<button type="button" class="link-btn" data-clear-attrs>Quitar filtros</button>' : '');
+    }
+
     function filtered() {
       const q = norm(state.q).trim();
-      let list = all.filter((p) => (state.cat === 'all' || p.category === state.cat)
+      let list = all.filter((p) => (state.cat === 'all' || p.category === state.cat) && matchesAttrs(p)
         && (!q || norm(`${p.name} ${p.description} ${Catalog.categoryName(p.category)} ${Catalog.colors(p).map((c) => c.name).join(' ')}`).includes(q)));
       const byName = (a, b) => a.name.localeCompare(b.name, 'es');
       if (state.sort === 'precio-asc') list.sort((a, b) => a.price - b.price);
@@ -192,6 +216,7 @@
     function render() {
       const list = filtered();
       renderChips();
+      renderAttrs();
       count.textContent = list.length === 1 ? '1 producto' : `${list.length} productos`;
       if (!list.length) {
         grid.innerHTML = `<div class="empty"><p><strong>No encontramos productos con esa búsqueda.</strong></p><p>Probá con otra palabra o mirá todas las categorías.</p><button type="button" class="btn btn-line" data-clear>Ver todos los productos</button></div>`;
@@ -204,6 +229,7 @@
       const p = new URLSearchParams();
       if (state.cat !== 'all') p.set('categoria', state.cat);
       if (state.q.trim()) p.set('q', state.q.trim());
+      if (state.vals.size) p.set('f', [...state.vals].join(','));
       if (state.sort !== 'destacados') p.set('orden', state.sort);
       try { history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p : '')); } catch (e) { /* algunos navegadores lo bloquean en file:// */ }
     }
@@ -216,12 +242,21 @@
       const active = chips.querySelector('.is-active');
       if (active) { active.focus({ preventScroll: true }); if (active.scrollIntoView) active.scrollIntoView({ inline: 'center', block: 'nearest' }); }
     });
+    if (attrBox) attrBox.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-val]');
+      if (b) {
+        if (state.vals.has(b.dataset.val)) state.vals.delete(b.dataset.val); else state.vals.add(b.dataset.val);
+        render();
+        const again = attrBox.querySelector(`[data-val="${CSS.escape(b.dataset.val)}"]`);
+        if (again) again.focus({ preventScroll: true });
+      } else if (e.target.closest('[data-clear-attrs]')) { state.vals.clear(); render(); }
+    });
     let t;
     search.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { state.q = search.value; render(); }, 150); });
     $('#catalog-search-form').addEventListener('submit', (e) => { e.preventDefault(); state.q = search.value; render(); });
     sort.addEventListener('change', () => { state.sort = sort.value; render(); });
     grid.addEventListener('click', (e) => {
-      if (e.target.closest('[data-clear]')) { state.cat = 'all'; state.q = ''; search.value = ''; render(); }
+      if (e.target.closest('[data-clear]')) { state.cat = 'all'; state.q = ''; state.vals.clear(); search.value = ''; render(); }
     });
 
     render();
@@ -247,6 +282,159 @@
     s.type = 'application/ld+json';
     s.textContent = JSON.stringify(ld);
     document.head.appendChild(s);
+  }
+
+  /* ==========================================================
+     DETALLE DE PRODUCTO (producto.html?id=…)
+     ========================================================== */
+  function initProduct() {
+    const root = $('#pd-root');
+    const p = Catalog.get(new URLSearchParams(location.search).get('id') || '');
+    if (!p) {
+      document.title = 'Producto no encontrado | Rincón de Sueño';
+      root.innerHTML = '<div class="empty empty-lg"><h1>No encontramos ese producto</h1><p>Puede que ya no esté disponible.</p><a class="btn btn-red" href="productos.html">Ver todos los productos</a></div>';
+      return;
+    }
+    const imgs = Catalog.images(p);
+    const avail = Catalog.isAvailable(p);
+    const st = stockInfo(p);
+    const catName = Catalog.categoryName(p.category);
+    const colors = Catalog.colors(p);
+    const specs = [];
+    if (catName) specs.push(['Categoría', catName]);
+    Catalog.attrsOf(p).forEach((g) => specs.push([g.name, g.values.map((v) => v.name).join(', ')]));
+    if (colors.length) specs.push([colors.some((c) => c.image) ? 'Colores y estampas' : 'Colores', colors.map((c) => c.name).join(', ')]);
+    const related = Catalog.products().filter((x) => x.category === p.category && x.id !== p.id).slice(0, 4);
+
+    document.title = `${p.name} | Rincón de Sueño`;
+    const setMeta = (sel, val) => { const m = $(sel); if (m) m.setAttribute('content', val); };
+    const desc = p.description ? `${p.description} Comprá online en Rincón de Sueño.` : `${p.name}: comprá online en Rincón de Sueño.`;
+    setMeta('meta[name="description"]', desc);
+    setMeta('meta[property="og:title"]', document.title);
+    setMeta('meta[property="og:description"]', desc);
+
+    const thumbs = imgs.length > 1 ? `
+        <div class="pd-thumbs" role="group" aria-label="Elegir foto">
+          ${imgs.map((u, i) => `<button type="button" class="pd-thumb" data-i="${i}" aria-label="Ver foto ${i + 1} de ${imgs.length}" aria-current="${i === 0}"><img class="pd-thumb-img" src="${esc(u)}" alt="" loading="lazy" width="64" height="64"></button>`).join('')}
+        </div>` : '';
+    root.innerHTML = `
+      <nav class="crumbs" aria-label="Ubicación">
+        <a href="index.html">Inicio</a><span aria-hidden="true">›</span>
+        <a href="productos.html">Productos</a>${catName ? `<span aria-hidden="true">›</span><a href="productos.html?categoria=${encodeURIComponent(p.category)}">${esc(catName)}</a>` : ''}
+      </nav>
+      <div class="pd-grid" data-pd>
+        <div class="pd-gallery">
+          <div class="pd-main${avail ? '' : ' is-out'}" id="pd-main">
+            <svg class="p-art" style="--c:${esc((p.art || {}).color || '#b9a3b0')}" aria-hidden="true" focusable="false"><use href="#p-${esc((p.art || {}).shape || 'folded')}"/></svg>
+            ${imgs.length ? `<img class="p-photo pd-photo" id="pd-img" src="${esc(imgs[0])}" alt="${esc(p.name)}" width="800" height="800">` : ''}
+            ${imgs.length > 1 ? `
+            <button class="pd-nav pd-prev" type="button" data-nav="-1" aria-label="Foto anterior"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></svg></button>
+            <button class="pd-nav pd-next" type="button" data-nav="1" aria-label="Foto siguiente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg></button>
+            <span class="pd-count" id="pd-count" aria-live="polite">1 / ${imgs.length}</span>` : ''}
+          </div>
+          ${thumbs}
+        </div>
+        <div class="pd-info">
+          <p class="p-cat">${esc(catName)}</p>
+          <h1 class="pd-title">${esc(p.name)}</h1>
+          <p class="pd-price">${fmt(p.price)}</p>
+          <p class="stock stock-${st.cls}">${st.text}</p>
+          ${p.description ? `<p class="pd-short">${esc(p.description)}</p>` : ''}
+          ${avail ? colorPickerHTML(p) : ''}
+          ${avail ? `
+          <div class="pd-buy">
+            <span class="pd-buy-label" id="pd-qty-label">Cantidad</span>
+            <div class="stepper" role="group" aria-labelledby="pd-qty-label">
+              <button type="button" data-q="-1" aria-label="Restar uno"><svg class="ico" aria-hidden="true"><use href="#i-minus"/></svg></button>
+              <output data-qty-out aria-live="polite">1</output>
+              <button type="button" data-q="1" aria-label="Sumar uno"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg></button>
+            </div>
+            <span class="fine" id="pd-avail"></span>
+          </div>
+          <div class="pd-actions">
+            <button class="btn btn-red btn-lg btn-block" type="button" data-buy="${esc(p.id)}">Comprar ahora</button>
+            <button class="btn btn-line btn-lg btn-block" type="button" data-add="${esc(p.id)}"><svg class="ico" aria-hidden="true"><use href="#i-cart"/></svg><span>Agregar al carrito</span></button>
+          </div>` : '<button class="btn btn-lg btn-block" type="button" disabled>Sin stock</button>'}
+          <a class="pd-wa" href="${esc(waLink(`Hola, quiero consultar por "${p.name}".`))}" target="_blank" rel="noopener">Consultar por WhatsApp<span class="sr-only"> (se abre en una pestaña nueva)</span></a>
+        </div>
+      </div>
+      ${specs.length ? `
+      <section class="pd-section" aria-labelledby="pd-specs-h">
+        <h2 id="pd-specs-h">Características</h2>
+        <table class="pd-specs"><tbody>${specs.map(([k, v]) => `<tr><th scope="row">${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</tbody></table>
+      </section>` : ''}
+      ${related.length ? `
+      <section class="pd-section" aria-labelledby="pd-rel-h">
+        <h2 id="pd-rel-h">Más de ${esc(catName || 'esta categoría')}</h2>
+        <div class="product-grid">${related.map(productCard).join('')}</div>
+      </section>` : ''}`;
+
+    /* Galería */
+    if (imgs.length > 1) {
+      let cur = 0;
+      const img = $('#pd-img');
+      const show = (i) => {
+        cur = (i + imgs.length) % imgs.length;
+        if (img) { img.src = imgs[cur]; img.alt = `${p.name} – foto ${cur + 1} de ${imgs.length}`; }
+        $('#pd-count').textContent = `${cur + 1} / ${imgs.length}`;
+        $$('.pd-thumb', root).forEach((b, k) => b.setAttribute('aria-current', String(k === cur)));
+      };
+      root.addEventListener('click', (e) => {
+        const n = e.target.closest('[data-nav]');
+        const t = e.target.closest('.pd-thumb');
+        if (n) show(cur + Number(n.dataset.nav));
+        else if (t) show(Number(t.dataset.i));
+      });
+      const main = $('#pd-main');
+      main.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft') show(cur - 1); else if (e.key === 'ArrowRight') show(cur + 1); });
+      let x0 = null;
+      main.addEventListener('touchstart', (e) => { x0 = e.changedTouches[0].clientX; }, { passive: true });
+      main.addEventListener('touchend', (e) => {
+        if (x0 === null) return;
+        const dx = e.changedTouches[0].clientX - x0; x0 = null;
+        if (Math.abs(dx) > 40) show(cur + (dx < 0 ? 1 : -1));
+      }, { passive: true });
+    }
+
+    /* Cantidad: el tope es el stock del color elegido (o el del producto si no hay colores) */
+    if (avail) {
+      const out = $('[data-qty-out]', root);
+      const availEl = $('#pd-avail');
+      const pickedColor = () => { const c = $('input[data-color-pick]:checked', root); return c ? c.value : ''; };
+      const maxQty = () => {
+        const cs = pickedColor() ? Catalog.colorStock(p, pickedColor()) : null;
+        return Math.max(1, Math.min(100, cs !== null ? cs : p.stock));
+      };
+      const sync = () => {
+        const max = maxQty();
+        if (Number(out.textContent) > max) out.textContent = max;
+        const c = pickedColor();
+        const cs = c ? Catalog.colorStock(p, c) : null;
+        availEl.textContent = cs !== null ? `${cs} ${cs === 1 ? 'disponible' : 'disponibles'} en ${c}` : (colors.length ? '' : `${p.stock} ${p.stock === 1 ? 'disponible' : 'disponibles'}`);
+      };
+      root.addEventListener('click', (e) => {
+        const q = e.target.closest('[data-q]');
+        if (!q) return;
+        out.textContent = Math.min(maxQty(), Math.max(1, Number(out.textContent) + Number(q.dataset.q)));
+      });
+      root.addEventListener('change', (e) => { if (e.target.closest('input[data-color-pick]')) sync(); });
+      sync();
+    }
+
+    const ld = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: p.name,
+      description: p.description || p.name,
+      category: catName,
+      ...(imgs.length ? { image: imgs } : {}),
+      ...(colors.length ? { color: colors.map((c) => c.name).join(', ') } : {}),
+      offers: { '@type': 'Offer', priceCurrency: 'ARS', price: p.price, availability: avail ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock' },
+    };
+    const sc = document.createElement('script');
+    sc.type = 'application/ld+json';
+    sc.textContent = JSON.stringify(ld);
+    document.head.appendChild(sc);
   }
 
   /* ==========================================================
@@ -280,7 +468,7 @@
               <td class="c-prod"><div class="c-inner">
                 <div class="c-thumb">${mediaHTML(l.product, Catalog.colorHex(l.product, l.color))}</div>
                 <div>
-                  <p class="c-name">${esc(l.product.name)}</p>
+                  <p class="c-name"><a href="producto.html?id=${encodeURIComponent(l.product.id)}">${esc(l.product.name)}</a></p>
                   ${l.color ? `<p class="c-color"><span class="swatch-dot sm${Catalog.colorImage(l.product, l.color) ? ' has-img' : ''}" style="${swatchStyle(Catalog.colorHex(l.product, l.color), Catalog.colorImage(l.product, l.color))}" aria-hidden="true"></span>Color: ${esc(l.color)}</p>` : ''}
                   <button class="link-btn" type="button" data-remove="${esc(l.product.id)}" data-color="${esc(l.color)}">Quitar<span class="sr-only"> ${esc(l.product.name)}${l.color ? ` color ${esc(l.color)}` : ''} del carrito</span></button>
                 </div>
@@ -538,6 +726,7 @@
   Catalog.load().then(() => {
     if (page === 'home') initHome();
     else if (page === 'productos') initCatalog();
+    else if (page === 'producto') initProduct();
     else if (page === 'carrito') initCart();
     else if (page === 'checkout') initCheckout();
     else if (page === 'pedido') initOrderDone();

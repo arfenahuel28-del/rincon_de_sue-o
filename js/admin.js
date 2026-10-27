@@ -8,6 +8,7 @@
   const B = window.BLACK;
   const { fmt, esc, norm, ORDER_STATUS, PAYMENT_STATUS } = B;
   const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const BUCKET = 'product-images';
 
   let sb = null;
@@ -15,6 +16,8 @@
   let categories = [];
   let orders = [];
   let storeSales = [];
+  let attrGroups = [];      // [{ id, name, sort_order, values: [{ id, name, sort_order }] }]
+  let attrsOk = false;      // false si todavía no se corrió subcategorias.sql
 
   const catName = (id) => (categories.find((c) => c.id === id) || {}).name || '—';
 
@@ -47,6 +50,15 @@
     if (error) throw error;
     products = data.map(B.rowToProduct);
   }
+  async function loadAttrs() {
+    const [g, v] = await Promise.all([
+      sb.from('attribute_groups').select('*').order('sort_order'),
+      sb.from('attribute_values').select('*').order('sort_order'),
+    ]);
+    if (g.error || v.error) { attrsOk = false; attrGroups = []; return; }
+    attrsOk = true;
+    attrGroups = g.data.map((x) => ({ ...x, values: v.data.filter((y) => y.group_id === x.id) }));
+  }
   async function loadOrders() {
     const { data, error } = await sb.from('orders').select('*, order_items(*)').order('created_at', { ascending: false });
     if (error) throw error;
@@ -77,6 +89,7 @@
     try {
       await Promise.all([loadCategories(), loadProducts(), loadOrders()]);
       await loadSales();
+      await loadAttrs();
     } catch (e) {
       loginErr.textContent = 'No se pudieron cargar los datos. Revisá la conexión e intentá de nuevo.';
       showApp(false);
@@ -85,6 +98,7 @@
     showApp(true);
     renderProducts();
     renderCategories();
+    renderGroups();
     renderOrders();
     renderSales();
   }
@@ -116,7 +130,7 @@
   });
 
   /* ---------- Pestañas ---------- */
-  const tabs = { productos: $('#tab-productos'), categorias: $('#tab-categorias'), pedidos: $('#tab-pedidos'), ventas: $('#tab-ventas') };
+  const tabs = { productos: $('#tab-productos'), categorias: $('#tab-categorias'), subcategorias: $('#tab-subcategorias'), pedidos: $('#tab-pedidos'), ventas: $('#tab-ventas') };
   async function selectTab(name) {
     Object.entries(tabs).forEach(([k, el]) => {
       const on = k === name;
@@ -125,7 +139,8 @@
       $('#panel-' + k).hidden = !on;
     });
     try {
-      if (name === 'ventas') { await Promise.all([loadOrders(), loadSales(), loadProducts()]); renderSales(); }
+      if (name === 'subcategorias') { await Promise.all([loadAttrs(), loadProducts()]); renderGroups(); }
+      else if (name === 'ventas') { await Promise.all([loadOrders(), loadSales(), loadProducts()]); renderSales(); }
       else if (name === 'pedidos') { await loadOrders(); renderOrders(); }
       else if (name === 'categorias') { await Promise.all([loadCategories(), loadProducts()]); renderCategories(); }
       else { await loadProducts(); renderProducts(); }
@@ -196,7 +211,8 @@
   const form = $('#prod-form');
   const catSelect = $('#p-cat');
   let editing = null;
-  let imageData = '';   // URL existente, o data: URL si se eligió una foto nueva
+  let gallery = [];     // [{ src }]: URL existente, o data: URL si se eligió una foto nueva. La primera es la principal.
+  const MAX_PHOTOS = 8;
 
   /* --- Colores disponibles del producto (se guardan dentro de art.colors) --- */
   const COLOR_HINTS = {
@@ -303,18 +319,60 @@
   function productArt() {
     const base = Object.assign({}, (editing && editing.art) || { shape: 'folded', color: '#b9a3b0' });
     if (formColors.length) base.colors = formColors.map((c) => { const o = { name: c.name, hex: c.hex, stock: c.stock }; if (c.image) o.image = c.image; return o; }); else delete base.colors;
+    const srcs = gallery.map((g) => g.src).filter((u) => !u.startsWith('data:'));
+    if (srcs.length) base.images = srcs; else delete base.images;
+    if (attrsOk) { const a = pickedAttrs(); if (Object.keys(a).length) base.attrs = a; else delete base.attrs; }
     return base;
   }
 
-  function showPreview() {
-    const p = { art: (editing && editing.art) || { shape: 'folded', color: '#b9a3b0' }, image: imageData };
-    $('#p-preview').innerHTML = thumb(p).replace(/^<div class="c-thumb">|<\/div>$/g, '');
-    $('#p-img-remove').hidden = !imageData;
+  function renderGallery() {
+    $('#p-gal').innerHTML = gallery.map((g, i) => `
+      <li class="gal-item">
+        <img src="${esc(g.src)}" alt="Foto ${i + 1}">
+        ${i === 0 ? '<span class="gal-main">Principal</span>' : ''}
+        <div class="gal-actions">
+          <button type="button" class="gal-btn" data-gal-left="${i}" aria-label="Mover la foto ${i + 1} hacia adelante"${i === 0 ? ' disabled' : ''}>←</button>
+          <button type="button" class="gal-btn" data-gal-right="${i}" aria-label="Mover la foto ${i + 1} hacia atrás"${i === gallery.length - 1 ? ' disabled' : ''}>→</button>
+          <button type="button" class="gal-btn gal-del" data-gal-del="${i}" aria-label="Quitar la foto ${i + 1}">×</button>
+        </div>
+      </li>`).join('');
+    $('#p-file').disabled = false;
+  }
+  $('#p-gal').addEventListener('click', (e) => {
+    const l = e.target.closest('[data-gal-left]'); const r = e.target.closest('[data-gal-right]'); const d = e.target.closest('[data-gal-del]');
+    let focus = null;
+    if (l) { const i = Number(l.dataset.galLeft); [gallery[i - 1], gallery[i]] = [gallery[i], gallery[i - 1]]; focus = `[data-gal-left="${i - 1}"]`; }
+    else if (r) { const i = Number(r.dataset.galRight); [gallery[i + 1], gallery[i]] = [gallery[i], gallery[i + 1]]; focus = `[data-gal-right="${i + 1}"]`; }
+    else if (d) { gallery.splice(Number(d.dataset.galDel), 1); $('#p-img-msg').textContent = gallery.length ? '' : 'Sin fotos se muestra un dibujo genérico.'; }
+    else return;
+    renderGallery();
+    const btn = focus && $('#p-gal').querySelector(focus + ':not([disabled])');
+    if (btn) btn.focus();
+  });
+
+  /* Subcategorías del producto: una casilla por opción, agrupadas */
+  function renderAttrPicker(p) {
+    const mine = (p && p.attrs) || {};
+    const wrap = $('#p-attrs');
+    if (!attrsOk || !attrGroups.some((g) => g.values.length)) {
+      wrap.innerHTML = '<p class="fine">Todavía no hay subcategorías. Podés crearlas en la pestaña "Subcategorías".</p>';
+      return;
+    }
+    wrap.innerHTML = attrGroups.filter((g) => g.values.length).map((g) => `
+      <fieldset class="attr-set">
+        <legend>${esc(g.name)}</legend>
+        <div class="attr-opts">${g.values.map((v) => `<label class="adm-check"><input type="checkbox" data-attr="${esc(g.id)}" value="${esc(v.id)}"${(mine[g.id] || []).includes(v.id) ? ' checked' : ''}> ${esc(v.name)}</label>`).join('')}</div>
+      </fieldset>`).join('');
+  }
+  function pickedAttrs() {
+    const out = {};
+    $$('#p-attrs input[data-attr]:checked').forEach((c) => { (out[c.dataset.attr] = out[c.dataset.attr] || []).push(c.value); });
+    return out;
   }
 
   function openForm(p) {
     editing = p || null;
-    imageData = p && p.image ? p.image : '';
+    gallery = p ? B.Catalog.images(p).map((src) => ({ src })) : [];
     $('#prod-dialog-title').textContent = p ? 'Editar producto' : 'Nuevo producto';
     form.elements.name.value = p ? p.name : '';
     form.elements.description.value = p ? p.description || '' : '';
@@ -326,7 +384,7 @@
     form.elements.active.checked = p ? p.active !== false : true;
     ['name', 'price', 'stock'].forEach((k) => { $('#p-err-' + k).textContent = ''; form.elements[k].removeAttribute('aria-invalid'); });
     $('#p-form-error').textContent = '';
-    $('#p-img-msg').textContent = 'Sin foto se muestra un dibujo genérico.';
+    $('#p-img-msg').textContent = gallery.length ? '' : 'Sin fotos se muestra un dibujo genérico.';
     $('#p-file').value = '';
     formColors = p && Array.isArray(p.colors) ? p.colors.map((c) => ({ name: c.name, hex: c.hex, stock: Number.isInteger(c.stock) ? c.stock : undefined, image: c.image || '' })) : [];
     renderFormColors();
@@ -336,7 +394,8 @@
     hexTouched = false;
     colorErr.textContent = '';
     colorNameEl.removeAttribute('aria-invalid');
-    showPreview();
+    renderGallery();
+    renderAttrPicker(p);
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
     form.elements.name.focus();
   }
@@ -388,17 +447,22 @@
     });
   }
   $('#p-file').addEventListener('change', async (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    try {
-      imageData = await toDataURL(f);
-      $('#p-img-msg').textContent = 'Foto lista. Se sube al presionar "Guardar producto".';
-      showPreview();
-    } catch (err) {
-      $('#p-img-msg').textContent = 'No pudimos leer esa imagen. Probá con otra (JPG o PNG).';
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    const msg = $('#p-img-msg');
+    let skipped = 0; let bad = 0;
+    for (const f of files) {
+      if (gallery.length >= MAX_PHOTOS) { skipped++; continue; }
+      try { gallery.push({ src: await toDataURL(f) }); } catch (err) { bad++; }
     }
+    renderGallery();
+    msg.textContent = [
+      'Las fotos nuevas se suben al presionar "Guardar producto".',
+      skipped ? `Solo entran ${MAX_PHOTOS} fotos: ${skipped === 1 ? 'una quedó afuera' : `${skipped} quedaron afuera`}.` : '',
+      bad ? `${bad === 1 ? 'No pudimos leer una imagen' : `No pudimos leer ${bad} imágenes`} (usá JPG o PNG).` : '',
+    ].filter(Boolean).join(' ');
   });
-  $('#p-img-remove').addEventListener('click', () => { imageData = ''; $('#p-file').value = ''; showPreview(); });
 
   const slug = (s) => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'producto';
   function uniqueId(name) {
@@ -408,9 +472,9 @@
     return id;
   }
 
-  async function uploadImage(id, data = imageData) {
+  async function uploadImage(id, data) {
     const blob = await (await fetch(data)).blob();
-    const path = `${id}-${Date.now()}.jpg`;
+    const path = `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.jpg`;
     const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: 'image/jpeg', cacheControl: '31536000' });
     if (error) throw error;
     return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
@@ -456,8 +520,11 @@
     $('#p-form-error').textContent = '';
     try {
       const id = editing ? editing.id : uniqueId(name);
-      let imageUrl = imageData;
-      if (imageData && imageData.startsWith('data:')) imageUrl = await uploadImage(id);
+      /* Fotos nuevas: se suben una por una y quedan en el mismo orden */
+      for (let i = 0; i < gallery.length; i++) {
+        if (gallery[i].src.startsWith('data:')) gallery[i].src = await uploadImage(id, gallery[i].src);
+      }
+      const imageUrl = gallery.length ? gallery[0].src : '';
       /* Fotos de estampas nuevas: se suben y quedan guardadas con su color */
       for (let i = 0; i < formColors.length; i++) {
         if (formColors[i].image && formColors[i].image.startsWith('data:')) formColors[i].image = await uploadImage(`estampa-${id}-${slug(formColors[i].name)}`, formColors[i].image);
@@ -646,6 +713,221 @@
     } finally {
       savingCat = false; submitBtn.disabled = false;
     }
+  });
+
+  /* ==========================================================
+     SUBCATEGORÍAS (grupos y opciones)
+     ========================================================== */
+  const grpList = $('#grp-list');
+  const nameDlg = $('#name-dialog');
+  const nameForm = $('#name-form');
+  const nameInput = $('#n-input');
+  const nameErr = $('#n-err');
+  let nameSubmit = null;
+  let savingName = false;
+  const MAX_GROUPS = 12;
+  const MAX_VALUES = 40;
+
+  const valueUses = (g, v) => products.filter((p) => ((p.attrs || {})[g.id] || []).includes(v.id)).length;
+  const attrSlug = (s) => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'opcion';
+
+  function renderGroups() {
+    $('#grp-load-error').textContent = attrsOk ? '' : 'Todavía no se pueden usar las subcategorías. Falta ejecutar el archivo supabase/subcategorias.sql en Supabase (una sola vez).';
+    $('#new-group').disabled = !attrsOk;
+    $('#grp-count').textContent = attrsOk ? (attrGroups.length === 1 ? '1 grupo' : `${attrGroups.length} grupos`) : '';
+    if (!attrsOk) { grpList.innerHTML = ''; return; }
+    if (!attrGroups.length) {
+      grpList.innerHTML = '<div class="empty empty-lg"><h2>Todavía no hay subcategorías</h2><p>Creá el primer grupo con el botón "+ Nuevo grupo". Por ejemplo "Composición" o "Tamaño".</p></div>';
+      return;
+    }
+    grpList.innerHTML = attrGroups.map((g, gi) => `
+      <article class="grp-card" data-g="${esc(g.id)}">
+        <div class="grp-head">
+          <div class="adm-main-info"><p class="adm-name">${esc(g.name)}</p><p class="adm-sub">${g.values.length === 1 ? '1 opción' : `${g.values.length} opciones`}</p></div>
+          <div class="adm-row-actions adm-cat-actions">
+            <button class="btn btn-line btn-move" type="button" data-g-up="${esc(g.id)}" aria-label="Subir el grupo ${esc(g.name)}"${gi === 0 ? ' disabled' : ''}>↑</button>
+            <button class="btn btn-line btn-move" type="button" data-g-down="${esc(g.id)}" aria-label="Bajar el grupo ${esc(g.name)}"${gi === attrGroups.length - 1 ? ' disabled' : ''}>↓</button>
+            <button class="btn btn-line" type="button" data-g-edit="${esc(g.id)}">Renombrar</button>
+            <button class="btn btn-line adm-del" type="button" data-g-del="${esc(g.id)}" aria-label="Eliminar el grupo ${esc(g.name)}">Eliminar</button>
+          </div>
+        </div>
+        <ul class="grp-values">
+          ${g.values.map((v, vi) => `
+          <li class="grp-value">
+            <span class="grp-vname">${esc(v.name)} <small>${valueUses(g, v)} ${valueUses(g, v) === 1 ? 'producto' : 'productos'}</small></span>
+            <span class="grp-vbtns">
+              <button class="btn btn-line btn-move" type="button" data-v-up="${esc(v.id)}" aria-label="Subir ${esc(v.name)}"${vi === 0 ? ' disabled' : ''}>↑</button>
+              <button class="btn btn-line btn-move" type="button" data-v-down="${esc(v.id)}" aria-label="Bajar ${esc(v.name)}"${vi === g.values.length - 1 ? ' disabled' : ''}>↓</button>
+              <button class="btn btn-line" type="button" data-v-edit="${esc(v.id)}" aria-label="Renombrar ${esc(v.name)}">Editar</button>
+              <button class="btn btn-line adm-del" type="button" data-v-del="${esc(v.id)}" aria-label="Eliminar ${esc(v.name)}">Quitar</button>
+            </span>
+          </li>`).join('') || '<li class="fine">Este grupo todavía no tiene opciones.</li>'}
+        </ul>
+        <div class="grp-add">
+          <label class="sr-only" for="gv-${esc(g.id)}">Nueva opción para ${esc(g.name)}</label>
+          <input class="select" id="gv-${esc(g.id)}" data-v-input="${esc(g.id)}" type="text" maxlength="60" placeholder="Nueva opción (ej: Algodón)" autocomplete="off">
+          <button class="btn btn-line" type="button" data-v-add="${esc(g.id)}">Agregar opción</button>
+        </div>
+        <p class="field-error" data-v-err="${esc(g.id)}" role="alert"></p>
+      </article>`).join('');
+  }
+
+  const findValue = (vid) => { for (const g of attrGroups) { const v = g.values.find((x) => x.id === vid); if (v) return { g, v }; } return null; };
+  const cleanName = (t) => { const n = t.trim().replace(/\s+/g, ' '); return n.charAt(0).toUpperCase() + n.slice(1); };
+
+  function openName({ title, label, value, onSubmit }) {
+    $('#n-title').textContent = title;
+    $('#n-label').textContent = label;
+    nameInput.value = value || '';
+    nameErr.textContent = '';
+    nameInput.removeAttribute('aria-invalid');
+    nameSubmit = onSubmit;
+    if (nameDlg.showModal) nameDlg.showModal(); else nameDlg.setAttribute('open', '');
+    nameInput.focus(); nameInput.select();
+  }
+  const closeName = () => { if (nameDlg.close) nameDlg.close(); else nameDlg.removeAttribute('open'); };
+  $('#n-cancel').addEventListener('click', closeName);
+  nameForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (savingName || !nameSubmit) return;
+    const name = cleanName(nameInput.value);
+    const err = name.length < 1 ? 'Escribí un nombre.' : (name.length > 60 ? 'Puede tener hasta 60 letras.' : '');
+    if (err) { nameErr.textContent = err; nameInput.setAttribute('aria-invalid', 'true'); nameInput.focus(); return; }
+    savingName = true;
+    try {
+      const problem = await nameSubmit(name);
+      if (problem) { nameErr.textContent = problem; nameInput.setAttribute('aria-invalid', 'true'); nameInput.focus(); return; }
+      closeName();
+    } finally { savingName = false; }
+  });
+
+  async function refreshAttrs() {
+    try { await loadAttrs(); } catch (e) { /* se queda con lo que hay */ }
+    renderGroups();
+  }
+
+  $('#new-group').addEventListener('click', () => {
+    if (attrGroups.length >= MAX_GROUPS) { window.alert(`Podés crear hasta ${MAX_GROUPS} grupos.`); return; }
+    openName({
+      title: 'Nuevo grupo', label: 'Nombre del grupo (ej: Composición, Tamaño)', value: '',
+      onSubmit: async (name) => {
+        if (attrGroups.some((g) => norm(g.name) === norm(name))) return 'Ya hay un grupo con ese nombre.';
+        let id = attrSlug(name); let n = 2;
+        while (attrGroups.some((g) => g.id === id)) id = `${attrSlug(name)}-${n++}`;
+        const { error } = await sb.from('attribute_groups').insert({ id, name, sort_order: attrGroups.length + 1 });
+        if (error) return 'No se pudo guardar. Intentá de nuevo.';
+        await refreshAttrs();
+        const inp = $(`[data-v-input="${CSS.escape(id)}"]`); if (inp) inp.focus();
+        return '';
+      },
+    });
+  });
+
+  async function addValue(gid) {
+    const g = attrGroups.find((x) => x.id === gid);
+    const input = $(`[data-v-input="${CSS.escape(gid)}"]`);
+    const errEl = $(`[data-v-err="${CSS.escape(gid)}"]`);
+    if (!g || !input) return;
+    const name = cleanName(input.value);
+    const err = name.length < 1 ? 'Escribí el nombre de la opción.'
+      : name.length > 60 ? 'Puede tener hasta 60 letras.'
+      : g.values.some((v) => norm(v.name) === norm(name)) ? 'Esa opción ya está en el grupo.'
+      : g.values.length >= MAX_VALUES ? `Cada grupo admite hasta ${MAX_VALUES} opciones.` : '';
+    errEl.textContent = err;
+    if (err) { input.focus(); return; }
+    let id = `${g.id}-${attrSlug(name)}`; let n = 2;
+    while (attrGroups.some((x) => x.values.some((v) => v.id === id))) id = `${g.id}-${attrSlug(name)}-${n++}`;
+    const { error } = await sb.from('attribute_values').insert({ id, group_id: g.id, name, sort_order: g.values.length + 1 });
+    if (error) { errEl.textContent = 'No se pudo guardar. Intentá de nuevo.'; return; }
+    await refreshAttrs();
+    const again = $(`[data-v-input="${CSS.escape(gid)}"]`); if (again) again.focus();
+  }
+
+  async function reorder(table, rows, i, j, focusSel) {
+    if (j < 0 || j >= rows.length) return;
+    const next = rows.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    const changes = next.map((r, idx) => ({ r, order: idx + 1 })).filter(({ r, order }) => r.sort_order !== order);
+    try {
+      const results = await Promise.all(changes.map(({ r, order }) => sb.from(table).update({ sort_order: order }).eq('id', r.id)));
+      const failed = results.find((x) => x.error);
+      if (failed) throw failed.error;
+    } catch (err) { window.alert('No se pudo cambiar el orden. Intentá de nuevo.'); }
+    await refreshAttrs();
+    const btn = grpList.querySelector(focusSel + ':not([disabled])');
+    if (btn) btn.focus();
+  }
+
+  grpList.addEventListener('click', async (e) => {
+    const t = (sel) => e.target.closest(sel);
+    let el;
+    if ((el = t('[data-v-add]'))) { addValue(el.dataset.vAdd); return; }
+    if ((el = t('[data-g-up]')) || (el = t('[data-g-down]'))) {
+      const id = el.dataset.gUp || el.dataset.gDown; const dir = el.dataset.gUp ? -1 : 1;
+      const i = attrGroups.findIndex((g) => g.id === id);
+      reorder('attribute_groups', attrGroups, i, i + dir, `[data-g-${dir < 0 ? 'up' : 'down'}="${CSS.escape(id)}"]`);
+      return;
+    }
+    if ((el = t('[data-v-up]')) || (el = t('[data-v-down]'))) {
+      const id = el.dataset.vUp || el.dataset.vDown; const dir = el.dataset.vUp ? -1 : 1;
+      const f = findValue(id); if (!f) return;
+      const i = f.g.values.findIndex((v) => v.id === id);
+      reorder('attribute_values', f.g.values, i, i + dir, `[data-v-${dir < 0 ? 'up' : 'down'}="${CSS.escape(id)}"]`);
+      return;
+    }
+    if ((el = t('[data-g-edit]'))) {
+      const g = attrGroups.find((x) => x.id === el.dataset.gEdit); if (!g) return;
+      openName({
+        title: 'Renombrar grupo', label: 'Nombre del grupo', value: g.name,
+        onSubmit: async (name) => {
+          if (attrGroups.some((x) => x.id !== g.id && norm(x.name) === norm(name))) return 'Ya hay un grupo con ese nombre.';
+          const { error } = await sb.from('attribute_groups').update({ name }).eq('id', g.id);
+          if (error) return 'No se pudo guardar. Intentá de nuevo.';
+          await refreshAttrs(); return '';
+        },
+      });
+      return;
+    }
+    if ((el = t('[data-v-edit]'))) {
+      const f = findValue(el.dataset.vEdit); if (!f) return;
+      openName({
+        title: 'Renombrar opción', label: `Nombre de la opción (${f.g.name})`, value: f.v.name,
+        onSubmit: async (name) => {
+          if (f.g.values.some((x) => x.id !== f.v.id && norm(x.name) === norm(name))) return 'Esa opción ya está en el grupo.';
+          const { error } = await sb.from('attribute_values').update({ name }).eq('id', f.v.id);
+          if (error) return 'No se pudo guardar. Intentá de nuevo.';
+          await refreshAttrs(); return '';
+        },
+      });
+      return;
+    }
+    if ((el = t('[data-v-del]'))) {
+      const f = findValue(el.dataset.vDel); if (!f) return;
+      const n = valueUses(f.g, f.v);
+      if (n > 0) { window.alert(`No se puede quitar "${f.v.name}" porque la usan ${n} ${n === 1 ? 'producto' : 'productos'}. Destildala en esos productos y volvé a intentar.`); return; }
+      if (!window.confirm(`¿Quitar la opción "${f.v.name}" del grupo ${f.g.name}?`)) return;
+      const { error } = await sb.from('attribute_values').delete().eq('id', f.v.id);
+      if (error) { window.alert('No se pudo quitar. Intentá de nuevo.'); return; }
+      await refreshAttrs();
+      return;
+    }
+    if ((el = t('[data-g-del]'))) {
+      const g = attrGroups.find((x) => x.id === el.dataset.gDel); if (!g) return;
+      const n = new Set(products.filter((p) => g.values.some((v) => ((p.attrs || {})[g.id] || []).includes(v.id))).map((p) => p.id)).size;
+      if (n > 0) { window.alert(`No se puede eliminar "${g.name}" porque ${n} ${n === 1 ? 'producto usa' : 'productos usan'} sus opciones. Destildalas en esos productos y volvé a intentar.`); return; }
+      if (!window.confirm(`¿Eliminar el grupo "${g.name}" con todas sus opciones? Esta acción no se puede deshacer.`)) return;
+      const { error } = await sb.from('attribute_groups').delete().eq('id', g.id);
+      if (error) { window.alert('No se pudo eliminar. Intentá de nuevo.'); return; }
+      await refreshAttrs();
+    }
+  });
+  grpList.addEventListener('keydown', (e) => {
+    const inp = e.target.closest('[data-v-input]');
+    if (inp && e.key === 'Enter') { e.preventDefault(); addValue(inp.dataset.vInput); }
+  });
+  grpList.addEventListener('input', (e) => {
+    const inp = e.target.closest('[data-v-input]');
+    if (inp) { const er = $(`[data-v-err="${CSS.escape(inp.dataset.vInput)}"]`); if (er) er.textContent = ''; }
   });
 
   /* ==========================================================

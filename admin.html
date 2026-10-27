@@ -54,6 +54,7 @@
       <div class="adm-tabs" role="tablist" aria-label="Secciones">
         <button class="adm-tab is-active" role="tab" id="tab-productos" aria-selected="true" aria-controls="panel-productos" type="button">Productos</button>
         <button class="adm-tab" role="tab" id="tab-categorias" aria-selected="false" aria-controls="panel-categorias" type="button">Categorías</button>
+        <button class="adm-tab" role="tab" id="tab-subcategorias" aria-selected="false" aria-controls="panel-subcategorias" type="button">Subcategorías</button>
         <button class="adm-tab" role="tab" id="tab-pedidos" aria-selected="false" aria-controls="panel-pedidos" type="button">Pedidos <span class="adm-count" id="orders-badge" hidden>0</span></button>
         <button class="adm-tab" role="tab" id="tab-ventas" aria-selected="false" aria-controls="panel-ventas" type="button">Ventas</button>
       </div>
@@ -81,6 +82,18 @@
         </div>
         <p class="result-count" id="cat-count" aria-live="polite"></p>
         <div class="adm-list" id="cat-list"></div>
+      </section>
+
+      <section id="panel-subcategorias" role="tabpanel" aria-labelledby="tab-subcategorias" hidden>
+        <div class="adm-toolbar">
+          <p class="fine adm-cat-help">Armá grupos como "Composición" o "Tamaño" y cargá sus opciones (Algodón, Poliéster, Queen…). Después, en cada producto, tildás las que le corresponden y los clientes pueden filtrar por ellas en la tienda.</p>
+          <div class="adm-toolbar-actions">
+            <button class="btn btn-red" type="button" id="new-group">+ Nuevo grupo</button>
+          </div>
+        </div>
+        <p class="form-error" id="grp-load-error" role="alert"></p>
+        <p class="result-count" id="grp-count" aria-live="polite"></p>
+        <div id="grp-list"></div>
       </section>
 
       <section id="panel-pedidos" role="tabpanel" aria-labelledby="tab-pedidos" hidden>
@@ -171,16 +184,17 @@
         <ul class="color-list" id="p-color-list" aria-label="Colores agregados"></ul>
       </div>
 
+      <div class="field" id="p-attrs-wrap">
+        <span class="label">Subcategorías <span class="opt">(opcional)</span></span>
+        <div id="p-attrs"></div>
+      </div>
+
       <div class="field">
-        <span class="label">Imagen</span>
-        <div class="adm-img">
-          <div class="c-thumb" id="p-preview"></div>
-          <div>
-            <label class="btn btn-line adm-file">Elegir foto<input id="p-file" type="file" accept="image/*"></label>
-            <button class="link-btn" type="button" id="p-img-remove" hidden>Quitar foto</button>
-            <p class="fine" id="p-img-msg">Sin foto se muestra un dibujo genérico.</p>
-          </div>
-        </div>
+        <span class="label" id="p-gal-label">Fotos <span class="opt">(opcional)</span></span>
+        <p class="fine" id="p-gal-help">Podés subir hasta 8. La primera es la principal (la que se ve en el catálogo). Con las flechas cambiás el orden.</p>
+        <ul class="gal-list" id="p-gal" aria-labelledby="p-gal-label"></ul>
+        <label class="btn btn-line adm-file">+ Agregar fotos<input id="p-file" type="file" accept="image/*" multiple></label>
+        <p class="fine" id="p-img-msg" role="status">Sin fotos se muestra un dibujo genérico.</p>
       </div>
 
       <div class="adm-checks">
@@ -254,6 +268,22 @@
       <div class="adm-dialog-actions">
         <button class="btn btn-line" type="button" id="s-cancel">Cancelar</button>
         <button class="btn btn-red" type="submit">Registrar venta</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Nombre (grupos y opciones de subcategorías) -->
+  <dialog class="adm-dialog" id="name-dialog" aria-labelledby="n-title">
+    <form id="name-form" novalidate>
+      <h2 id="n-title">Nombre</h2>
+      <div class="field">
+        <label for="n-input" id="n-label">Nombre</label>
+        <input id="n-input" type="text" maxlength="60" autocomplete="off" aria-describedby="n-err">
+        <p class="field-error" id="n-err" role="alert"></p>
+      </div>
+      <div class="adm-dialog-actions">
+        <button class="btn btn-line" type="button" id="n-cancel">Cancelar</button>
+        <button class="btn btn-red" type="submit">Guardar</button>
       </div>
     </form>
   </dialog>
