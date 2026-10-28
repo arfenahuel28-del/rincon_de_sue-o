@@ -561,9 +561,26 @@
         <input type="radio" name="delivery" value="${esc(d.id)}"${i === 0 ? ' checked' : ''}>
         <span class="choice-box"><strong>${esc(d.label)}</strong><small>${esc(d.note)}</small></span>
       </label>`).join('');
-    $('#payment-note').textContent = Payments.enabled()
-      ? 'Vas a pagar de forma segura con Mercado Pago al confirmar el pedido.'
-      : 'El pago se coordina con el local al confirmar tu pedido.';
+    /* Medios de pago desde la configuración (si hay pago online activo, se paga ahí) */
+    const payBox = $('#payment-options');
+    const payNote = $('#payment-note');
+    const methods = Payments.enabled() ? [] : (cfg.paymentMethods || []);
+    const selectedPayment = () => (form.querySelector('input[name="payment"]:checked') || {}).value || '';
+    if (methods.length) {
+      payBox.innerHTML = methods.map((m, i) => `
+        <label class="choice">
+          <input type="radio" name="payment" value="${esc(m.id)}"${i === 0 ? ' checked' : ''}>
+          <span class="choice-box"><strong>${esc(m.label)}</strong></span>
+        </label>`).join('');
+      const showPayNote = () => { const m = methods.find((x) => x.id === selectedPayment()); payNote.textContent = m ? m.note : ''; };
+      payBox.addEventListener('change', showPayNote);
+      showPayNote();
+    } else {
+      payBox.hidden = true;
+      payNote.textContent = Payments.enabled()
+        ? 'Vas a pagar de forma segura con Mercado Pago al confirmar el pedido.'
+        : 'El pago se coordina con el local al confirmar tu pedido.';
+    }
 
     function renderSummary(noticeList = []) {
       const lines = Cart.lines();
@@ -637,7 +654,7 @@
       try {
         const data = {
           name: form.elements.name.value.trim(), phone: form.elements.phone.value.trim(), email: form.elements.email.value.trim(),
-          delivery: selectedDelivery(), address: form.elements.address.value.trim(), notes: form.elements.notes.value.trim(),
+          delivery: selectedDelivery(), payment: selectedPayment(), address: form.elements.address.value.trim(), notes: form.elements.notes.value.trim(),
         };
         order = await Orders.submit(Orders.buildPayload(data, Cart.lines()));
       } catch (err) {
@@ -696,11 +713,12 @@
           <dl class="facts">
             <div><dt>Estado del pedido</dt><dd>${esc(ORDER_STATUS[order.status] || order.status)}</dd></div>
             <div><dt>Estado del pago</dt><dd>${esc(PAYMENT_STATUS[order.payment && order.payment.status] || 'Pendiente')}</dd></div>
+            ${order.paymentMethod ? `<div><dt>Medio de pago</dt><dd>${esc(order.paymentMethod.label)}${order.paymentMethod.note ? `<br>${esc(order.paymentMethod.note)}` : ''}</dd></div>` : ''}
             <div><dt>Entrega</dt><dd>${esc(order.delivery.label)}${order.delivery.address ? `<br>${esc(order.delivery.address)}` : ''}</dd></div>
             <div><dt>Cliente</dt><dd>${esc(order.customer.name)}<br>${esc(order.customer.phone)}<br>${esc(order.customer.email)}</dd></div>
             ${order.delivery.notes ? `<div><dt>Observaciones</dt><dd>${esc(order.delivery.notes)}</dd></div>` : ''}
           </dl>
-          <p class="fine">${Payments.enabled() ? '' : 'El pago se coordina con el local. '}¿Dudas sobre tu pedido? <a href="${waLink(`Hola Rincón de Sueño, consulto por mi pedido ${order.number}.`)}" target="_blank" rel="noopener">Escribinos por WhatsApp</a>.</p>
+          <p class="fine">${Payments.enabled() || order.paymentMethod ? '' : 'El pago se coordina con el local. '}¿Dudas sobre tu pedido? <a href="${waLink(`Hola Rincón de Sueño, consulto por mi pedido ${order.number}.`)}" target="_blank" rel="noopener">Escribinos por WhatsApp</a>.</p>
         </section>
       </div>
       <div class="actions-row"><a class="btn btn-red btn-lg" href="productos.html">Seguir comprando</a></div>`;

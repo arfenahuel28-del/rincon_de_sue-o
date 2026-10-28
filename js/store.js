@@ -299,12 +299,14 @@
       const items = lines.map((l) => ({ productId: l.product.id, name: l.product.name, color: l.color || '', unitPrice: l.unitPrice, quantity: l.qty, subtotal: l.subtotal }));
       /* La base no guarda el color en cada línea: se agrega a las observaciones para que el local lo vea en el pedido. */
       const colorLines = lines.filter((l) => l.color).map((l) => `${l.product.name} → ${l.color} (×${l.qty})`);
-      const notes = [form.notes, colorLines.length ? 'Colores elegidos:\n' + colorLines.join('\n') : ''].filter(Boolean).join('\n\n');
+      const pay = (cfg.paymentMethods || []).find((m) => m.id === form.payment) || null;
+      const notes = [form.notes, colorLines.length ? 'Colores elegidos:\n' + colorLines.join('\n') : '', pay ? 'Medio de pago elegido: ' + pay.label : ''].filter(Boolean).join('\n\n');
       const method = cfg.delivery.find((d) => d.id === form.delivery) || cfg.delivery[0];
       return {
         customer: { name: form.name, phone: form.phone, email: form.email },
         delivery: { method: method.id, label: method.label, address: method.needsAddress ? form.address : '', notes },
         items,
+        paymentMethod: pay ? { id: pay.id, label: pay.label, note: pay.note } : null,
         total: items.reduce((s, i) => s + i.subtotal, 0),
       };
     },
