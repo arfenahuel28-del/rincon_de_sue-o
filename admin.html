@@ -54,7 +54,6 @@
       <div class="adm-tabs" role="tablist" aria-label="Secciones">
         <button class="adm-tab is-active" role="tab" id="tab-productos" aria-selected="true" aria-controls="panel-productos" type="button">Productos</button>
         <button class="adm-tab" role="tab" id="tab-categorias" aria-selected="false" aria-controls="panel-categorias" type="button">Categorías</button>
-        <button class="adm-tab" role="tab" id="tab-subcategorias" aria-selected="false" aria-controls="panel-subcategorias" type="button">Subcategorías</button>
         <button class="adm-tab" role="tab" id="tab-pedidos" aria-selected="false" aria-controls="panel-pedidos" type="button">Pedidos <span class="adm-count" id="orders-badge" hidden>0</span></button>
         <button class="adm-tab" role="tab" id="tab-ventas" aria-selected="false" aria-controls="panel-ventas" type="button">Ventas</button>
       </div>
@@ -75,25 +74,14 @@
 
       <section id="panel-categorias" role="tabpanel" aria-labelledby="tab-categorias" hidden>
         <div class="adm-toolbar">
-          <p class="fine adm-cat-help">Las categorías ordenan los productos en la tienda. Con las flechas elegís en qué orden se muestran. En el inicio solo aparecen las que tienen productos.</p>
+          <p class="fine adm-cat-help">Las categorías ordenan los productos en la tienda. Con las flechas elegís en qué orden se muestran. En el inicio solo aparecen las que tienen productos. Dentro de cada categoría podés crear filtros (por ejemplo, en Sábanas: Medida y Composición) para que los clientes encuentren más rápido lo que buscan.</p>
           <div class="adm-toolbar-actions">
             <button class="btn btn-red" type="button" id="new-category">+ Nueva categoría</button>
           </div>
         </div>
+        <p class="form-error" id="grp-load-error" role="alert"></p>
         <p class="result-count" id="cat-count" aria-live="polite"></p>
         <div class="adm-list" id="cat-list"></div>
-      </section>
-
-      <section id="panel-subcategorias" role="tabpanel" aria-labelledby="tab-subcategorias" hidden>
-        <div class="adm-toolbar">
-          <p class="fine adm-cat-help">Armá grupos como "Composición" o "Tamaño" y cargá sus opciones (Algodón, Poliéster, Queen…). Después, en cada producto, tildás las que le corresponden y los clientes pueden filtrar por ellas en la tienda.</p>
-          <div class="adm-toolbar-actions">
-            <button class="btn btn-red" type="button" id="new-group">+ Nuevo grupo</button>
-          </div>
-        </div>
-        <p class="form-error" id="grp-load-error" role="alert"></p>
-        <p class="result-count" id="grp-count" aria-live="polite"></p>
-        <div id="grp-list"></div>
       </section>
 
       <section id="panel-pedidos" role="tabpanel" aria-labelledby="tab-pedidos" hidden>

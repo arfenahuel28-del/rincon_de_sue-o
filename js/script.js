@@ -170,6 +170,7 @@
       vals: new Set((params.get('f') || '').split(',').filter(Boolean)),
       sort: ['precio-asc', 'precio-desc', 'nombre'].includes(params.get('orden')) ? params.get('orden') : 'destacados',
     };
+    { const known = new Set(state.cat === 'all' ? [] : Catalog.attrGroups(state.cat).flatMap((g) => g.values.map((v) => v.id))); state.vals = new Set([...state.vals].filter((v) => known.has(v))); }
     search.value = state.q;
     sort.value = state.sort;
 
@@ -182,15 +183,17 @@
     }
 
     /* Subcategorías: dentro de un mismo grupo alcanza con cumplir una (ej. algodón O poliéster); entre grupos se cumplen todos (ej. algodón Y queen) */
-    const matchesAttrs = (p) => Catalog.attrGroups().every((g) => {
+    const activeGroups = () => (state.cat === 'all' ? [] : Catalog.attrGroups(state.cat));
+    const matchesAttrs = (p) => activeGroups().every((g) => {
       const picked = g.values.filter((v) => state.vals.has(v.id));
       return !picked.length || picked.some((v) => ((p.attrs || {})[g.id] || []).includes(v.id));
     });
     const attrBox = $('#attr-filters');
     function renderAttrs() {
       if (!attrBox) return;
-      const groups = Catalog.attrGroups()
-        .map((g) => ({ g, values: g.values.map((v) => ({ v, n: all.filter((p) => ((p.attrs || {})[g.id] || []).includes(v.id)).length })).filter((x) => x.n > 0) }))
+      const inCat = all.filter((p) => p.category === state.cat);
+      const groups = activeGroups()
+        .map((g) => ({ g, values: g.values.map((v) => ({ v, n: inCat.filter((p) => ((p.attrs || {})[g.id] || []).includes(v.id)).length })).filter((x) => x.n > 0) }))
         .filter((x) => x.values.length);
       attrBox.innerHTML = groups.map(({ g, values }) => `
         <div class="filter-row">
@@ -237,6 +240,7 @@
     chips.addEventListener('click', (e) => {
       const b = e.target.closest('[data-cat]');
       if (!b) return;
+      if (state.cat !== b.dataset.cat) state.vals.clear();   // las opciones pertenecen a una categoría
       state.cat = b.dataset.cat;
       render();
       const active = chips.querySelector('.is-active');

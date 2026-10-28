@@ -146,7 +146,7 @@
               sb.from('attribute_values').select('*').order('sort_order'),
             ]);
             if (g.error || v.error) throw (g.error || v.error);
-            window.BLACK_ATTRS = g.data.map((x) => ({ id: x.id, name: x.name, values: v.data.filter((y) => y.group_id === x.id).map((y) => ({ id: y.id, name: y.name })) }));
+            window.BLACK_ATTRS = g.data.filter((x) => x.category_id).map((x) => ({ id: x.id, categoryId: x.category_id, name: x.name, values: v.data.filter((y) => y.group_id === x.id).map((y) => ({ id: y.id, name: y.name })) }));
           } catch (e2) { window.BLACK_ATTRS = []; }
         } catch (e) {
           console.warn('No se pudo leer el catálogo de Supabase; se usa el catálogo local.', e);
@@ -168,12 +168,12 @@
     },
     categories() { return window.BLACK_CATEGORIES || []; },
     products() { return (window.BLACK_PRODUCTS || []).filter((p) => p.active !== false); },
-    /* Subcategorías (grupos con sus valores). Solo cuentan los grupos que tienen valores. */
-    attrGroups() { return (window.BLACK_ATTRS || []).filter((g) => g.values && g.values.length); },
+    /* Filtros de una categoría (grupos con sus opciones). Solo cuentan los grupos que tienen opciones. */
+    attrGroups(categoryId) { return (window.BLACK_ATTRS || []).filter((g) => g.values && g.values.length && (!categoryId || g.categoryId === categoryId)); },
     /* Las del producto, listas para mostrar: [{ id, name, values: [{id, name}] }] */
     attrsOf(p) {
       const mine = (p && p.attrs) || {};
-      return this.attrGroups()
+      return this.attrGroups(p && p.category)
         .map((g) => ({ id: g.id, name: g.name, values: g.values.filter((v) => (mine[g.id] || []).includes(v.id)) }))
         .filter((g) => g.values.length);
     },

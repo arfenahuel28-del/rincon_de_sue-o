@@ -98,7 +98,6 @@
     showApp(true);
     renderProducts();
     renderCategories();
-    renderGroups();
     renderOrders();
     renderSales();
   }
@@ -130,7 +129,7 @@
   });
 
   /* ---------- Pestañas ---------- */
-  const tabs = { productos: $('#tab-productos'), categorias: $('#tab-categorias'), subcategorias: $('#tab-subcategorias'), pedidos: $('#tab-pedidos'), ventas: $('#tab-ventas') };
+  const tabs = { productos: $('#tab-productos'), categorias: $('#tab-categorias'), pedidos: $('#tab-pedidos'), ventas: $('#tab-ventas') };
   async function selectTab(name) {
     Object.entries(tabs).forEach(([k, el]) => {
       const on = k === name;
@@ -139,10 +138,9 @@
       $('#panel-' + k).hidden = !on;
     });
     try {
-      if (name === 'subcategorias') { await Promise.all([loadAttrs(), loadProducts()]); renderGroups(); }
-      else if (name === 'ventas') { await Promise.all([loadOrders(), loadSales(), loadProducts()]); renderSales(); }
+      if (name === 'ventas') { await Promise.all([loadOrders(), loadSales(), loadProducts()]); renderSales(); }
       else if (name === 'pedidos') { await loadOrders(); renderOrders(); }
-      else if (name === 'categorias') { await Promise.all([loadCategories(), loadProducts()]); renderCategories(); }
+      else if (name === 'categorias') { await Promise.all([loadCategories(), loadProducts(), loadAttrs()]); renderCategories(); }
       else { await loadProducts(); renderProducts(); }
     } catch (e) { /* se queda con lo que ya está en pantalla */ }
   }
@@ -354,11 +352,14 @@
   function renderAttrPicker(p) {
     const mine = (p && p.attrs) || {};
     const wrap = $('#p-attrs');
-    if (!attrsOk || !attrGroups.some((g) => g.values.length)) {
-      wrap.innerHTML = '<p class="fine">Todavía no hay subcategorías. Podés crearlas en la pestaña "Subcategorías".</p>';
+    const catId = form.elements.category.value;
+    const groups = attrsOk ? groupsOf(catId).filter((g) => g.values.length) : [];
+    $('#p-attrs-wrap').hidden = !attrsOk;
+    if (!groups.length) {
+      wrap.innerHTML = '<p class="fine">Esta categoría todavía no tiene filtros. Podés crearlos en la pestaña "Categorías", dentro de la categoría.</p>';
       return;
     }
-    wrap.innerHTML = attrGroups.filter((g) => g.values.length).map((g) => `
+    wrap.innerHTML = groups.map((g) => `
       <fieldset class="attr-set">
         <legend>${esc(g.name)}</legend>
         <div class="attr-opts">${g.values.map((v) => `<label class="adm-check"><input type="checkbox" data-attr="${esc(g.id)}" value="${esc(v.id)}"${(mine[g.id] || []).includes(v.id) ? ' checked' : ''}> ${esc(v.name)}</label>`).join('')}</div>
@@ -369,6 +370,7 @@
     $$('#p-attrs input[data-attr]:checked').forEach((c) => { (out[c.dataset.attr] = out[c.dataset.attr] || []).push(c.value); });
     return out;
   }
+  catSelect.addEventListener('change', () => renderAttrPicker({ attrs: pickedAttrs() }));
 
   function openForm(p) {
     editing = p || null;
@@ -590,6 +592,7 @@
 
   function renderCategories() {
     $('#cat-count').textContent = categories.length === 1 ? '1 categoría' : `${categories.length} categorías`;
+    $('#grp-load-error').textContent = attrsOk ? '' : 'Los filtros por categoría todavía no se pueden usar. Falta ejecutar el archivo supabase/subcategorias.sql en Supabase (una sola vez).';
     if (!categories.length) {
       catList.innerHTML = '<div class="empty empty-lg"><h2>Todavía no hay categorías</h2><p>Creá la primera con el botón "+ Nueva categoría".</p></div>';
       return;
@@ -609,6 +612,7 @@
           <button class="btn btn-line" type="button" data-edit-cat="${esc(c.id)}">Editar</button>
           <button class="btn btn-line adm-del" type="button" data-del-cat="${esc(c.id)}" aria-label="Eliminar ${esc(c.name)}">Eliminar</button>
         </div>
+        ${filtersHTML(c)}
       </article>`;
     }).join('');
   }
@@ -716,39 +720,34 @@
   });
 
   /* ==========================================================
-     SUBCATEGORÍAS (grupos y opciones)
+     FILTROS DE CADA CATEGORÍA (grupos y opciones)
+     Ej: en "Sábanas" → grupo "Medida" (1 plaza, 2 plazas, Queen…) y grupo "Composición".
+     Viven dentro de la pestaña Categorías.
      ========================================================== */
-  const grpList = $('#grp-list');
   const nameDlg = $('#name-dialog');
   const nameForm = $('#name-form');
   const nameInput = $('#n-input');
   const nameErr = $('#n-err');
   let nameSubmit = null;
   let savingName = false;
-  const MAX_GROUPS = 12;
-  const MAX_VALUES = 40;
+  const MAX_GROUPS = 6;      // por categoría
+  const MAX_VALUES = 40;     // por grupo
+  const openCats = new Set(); // categorías con el panel de filtros abierto
 
+  const groupsOf = (catId) => attrGroups.filter((g) => g.category_id === catId);
   const valueUses = (g, v) => products.filter((p) => ((p.attrs || {})[g.id] || []).includes(v.id)).length;
   const attrSlug = (s) => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'opcion';
 
-  function renderGroups() {
-    $('#grp-load-error').textContent = attrsOk ? '' : 'Todavía no se pueden usar las subcategorías. Falta ejecutar el archivo supabase/subcategorias.sql en Supabase (una sola vez).';
-    $('#new-group').disabled = !attrsOk;
-    $('#grp-count').textContent = attrsOk ? (attrGroups.length === 1 ? '1 grupo' : `${attrGroups.length} grupos`) : '';
-    if (!attrsOk) { grpList.innerHTML = ''; return; }
-    if (!attrGroups.length) {
-      grpList.innerHTML = '<div class="empty empty-lg"><h2>Todavía no hay subcategorías</h2><p>Creá el primer grupo con el botón "+ Nuevo grupo". Por ejemplo "Composición" o "Tamaño".</p></div>';
-      return;
-    }
-    grpList.innerHTML = attrGroups.map((g, gi) => `
-      <article class="grp-card" data-g="${esc(g.id)}">
+  function groupCardHTML(g, gi, total) {
+    return `
+      <div class="grp-card" data-g="${esc(g.id)}">
         <div class="grp-head">
           <div class="adm-main-info"><p class="adm-name">${esc(g.name)}</p><p class="adm-sub">${g.values.length === 1 ? '1 opción' : `${g.values.length} opciones`}</p></div>
           <div class="adm-row-actions adm-cat-actions">
-            <button class="btn btn-line btn-move" type="button" data-g-up="${esc(g.id)}" aria-label="Subir el grupo ${esc(g.name)}"${gi === 0 ? ' disabled' : ''}>↑</button>
-            <button class="btn btn-line btn-move" type="button" data-g-down="${esc(g.id)}" aria-label="Bajar el grupo ${esc(g.name)}"${gi === attrGroups.length - 1 ? ' disabled' : ''}>↓</button>
+            <button class="btn btn-line btn-move" type="button" data-g-up="${esc(g.id)}" aria-label="Subir el filtro ${esc(g.name)}"${gi === 0 ? ' disabled' : ''}>↑</button>
+            <button class="btn btn-line btn-move" type="button" data-g-down="${esc(g.id)}" aria-label="Bajar el filtro ${esc(g.name)}"${gi === total - 1 ? ' disabled' : ''}>↓</button>
             <button class="btn btn-line" type="button" data-g-edit="${esc(g.id)}">Renombrar</button>
-            <button class="btn btn-line adm-del" type="button" data-g-del="${esc(g.id)}" aria-label="Eliminar el grupo ${esc(g.name)}">Eliminar</button>
+            <button class="btn btn-line adm-del" type="button" data-g-del="${esc(g.id)}" aria-label="Eliminar el filtro ${esc(g.name)}">Eliminar</button>
           </div>
         </div>
         <ul class="grp-values">
@@ -761,7 +760,7 @@
               <button class="btn btn-line" type="button" data-v-edit="${esc(v.id)}" aria-label="Renombrar ${esc(v.name)}">Editar</button>
               <button class="btn btn-line adm-del" type="button" data-v-del="${esc(v.id)}" aria-label="Eliminar ${esc(v.name)}">Quitar</button>
             </span>
-          </li>`).join('') || '<li class="fine">Este grupo todavía no tiene opciones.</li>'}
+          </li>`).join('') || '<li class="fine">Este filtro todavía no tiene opciones.</li>'}
         </ul>
         <div class="grp-add">
           <label class="sr-only" for="gv-${esc(g.id)}">Nueva opción para ${esc(g.name)}</label>
@@ -769,8 +768,28 @@
           <button class="btn btn-line" type="button" data-v-add="${esc(g.id)}">Agregar opción</button>
         </div>
         <p class="field-error" data-v-err="${esc(g.id)}" role="alert"></p>
-      </article>`).join('');
+      </div>`;
   }
+
+  /* Bloque desplegable que se muestra dentro de cada categoría */
+  function filtersHTML(c) {
+    if (!attrsOk) return '';
+    const gs = groupsOf(c.id);
+    return `
+      <details class="cat-filters" data-cat-filters="${esc(c.id)}"${openCats.has(c.id) ? ' open' : ''}>
+        <summary>Filtros de ${esc(c.name)} <small>${gs.length ? gs.map((g) => esc(g.name)).join(' · ') : 'ninguno todavía'}</small></summary>
+        <div class="cat-filters-body">
+          <p class="fine">Los clientes los usan para filtrar los productos de esta categoría. Ejemplo: "Medida" con 1 plaza, 2 plazas, Queen; o "Composición" con Algodón, Poliéster.</p>
+          ${gs.map((g, i) => groupCardHTML(g, i, gs.length)).join('')}
+          <button class="btn btn-line" type="button" data-g-new="${esc(c.id)}">+ Nuevo filtro en ${esc(c.name)}</button>
+        </div>
+      </details>`;
+  }
+  catList.addEventListener('toggle', (e) => {
+    const d = e.target.closest && e.target.closest('[data-cat-filters]');
+    if (!d) return;
+    if (d.open) openCats.add(d.dataset.catFilters); else openCats.delete(d.dataset.catFilters);
+  }, true);
 
   const findValue = (vid) => { for (const g of attrGroups) { const v = g.values.find((x) => x.id === vid); if (v) return { g, v }; } return null; };
   const cleanName = (t) => { const n = t.trim().replace(/\s+/g, ' '); return n.charAt(0).toUpperCase() + n.slice(1); };
@@ -803,25 +822,29 @@
 
   async function refreshAttrs() {
     try { await loadAttrs(); } catch (e) { /* se queda con lo que hay */ }
-    renderGroups();
+    renderCategories();
   }
 
-  $('#new-group').addEventListener('click', () => {
-    if (attrGroups.length >= MAX_GROUPS) { window.alert(`Podés crear hasta ${MAX_GROUPS} grupos.`); return; }
+  function newGroup(catId) {
+    const cat = categories.find((c) => c.id === catId);
+    if (!cat) return;
+    const sibs = groupsOf(catId);
+    if (sibs.length >= MAX_GROUPS) { window.alert(`Cada categoría admite hasta ${MAX_GROUPS} filtros.`); return; }
+    openCats.add(catId);
     openName({
-      title: 'Nuevo grupo', label: 'Nombre del grupo (ej: Composición, Tamaño)', value: '',
+      title: `Nuevo filtro en ${cat.name}`, label: 'Nombre del filtro (ej: Medida, Composición)', value: '',
       onSubmit: async (name) => {
-        if (attrGroups.some((g) => norm(g.name) === norm(name))) return 'Ya hay un grupo con ese nombre.';
-        let id = attrSlug(name); let n = 2;
-        while (attrGroups.some((g) => g.id === id)) id = `${attrSlug(name)}-${n++}`;
-        const { error } = await sb.from('attribute_groups').insert({ id, name, sort_order: attrGroups.length + 1 });
+        if (sibs.some((g) => norm(g.name) === norm(name))) return 'Ya hay un filtro con ese nombre en esta categoría.';
+        let id = `${catId}-${attrSlug(name)}`; let n = 2;
+        while (attrGroups.some((g) => g.id === id)) id = `${catId}-${attrSlug(name)}-${n++}`;
+        const { error } = await sb.from('attribute_groups').insert({ id, category_id: catId, name, sort_order: sibs.length + 1 });
         if (error) return 'No se pudo guardar. Intentá de nuevo.';
         await refreshAttrs();
         const inp = $(`[data-v-input="${CSS.escape(id)}"]`); if (inp) inp.focus();
         return '';
       },
     });
-  });
+  }
 
   async function addValue(gid) {
     const g = attrGroups.find((x) => x.id === gid);
@@ -831,8 +854,8 @@
     const name = cleanName(input.value);
     const err = name.length < 1 ? 'Escribí el nombre de la opción.'
       : name.length > 60 ? 'Puede tener hasta 60 letras.'
-      : g.values.some((v) => norm(v.name) === norm(name)) ? 'Esa opción ya está en el grupo.'
-      : g.values.length >= MAX_VALUES ? `Cada grupo admite hasta ${MAX_VALUES} opciones.` : '';
+      : g.values.some((v) => norm(v.name) === norm(name)) ? 'Esa opción ya está en el filtro.'
+      : g.values.length >= MAX_VALUES ? `Cada filtro admite hasta ${MAX_VALUES} opciones.` : '';
     errEl.textContent = err;
     if (err) { input.focus(); return; }
     let id = `${g.id}-${attrSlug(name)}`; let n = 2;
@@ -854,18 +877,21 @@
       if (failed) throw failed.error;
     } catch (err) { window.alert('No se pudo cambiar el orden. Intentá de nuevo.'); }
     await refreshAttrs();
-    const btn = grpList.querySelector(focusSel + ':not([disabled])');
+    const btn = catList.querySelector(focusSel + ':not([disabled])');
     if (btn) btn.focus();
   }
 
-  grpList.addEventListener('click', async (e) => {
+  catList.addEventListener('click', async (e) => {
     const t = (sel) => e.target.closest(sel);
     let el;
+    if ((el = t('[data-g-new]'))) { newGroup(el.dataset.gNew); return; }
     if ((el = t('[data-v-add]'))) { addValue(el.dataset.vAdd); return; }
     if ((el = t('[data-g-up]')) || (el = t('[data-g-down]'))) {
       const id = el.dataset.gUp || el.dataset.gDown; const dir = el.dataset.gUp ? -1 : 1;
-      const i = attrGroups.findIndex((g) => g.id === id);
-      reorder('attribute_groups', attrGroups, i, i + dir, `[data-g-${dir < 0 ? 'up' : 'down'}="${CSS.escape(id)}"]`);
+      const g = attrGroups.find((x) => x.id === id); if (!g) return;
+      const sibs = groupsOf(g.category_id);
+      const i = sibs.findIndex((x) => x.id === id);
+      reorder('attribute_groups', sibs, i, i + dir, `[data-g-${dir < 0 ? 'up' : 'down'}="${CSS.escape(id)}"]`);
       return;
     }
     if ((el = t('[data-v-up]')) || (el = t('[data-v-down]'))) {
@@ -878,9 +904,9 @@
     if ((el = t('[data-g-edit]'))) {
       const g = attrGroups.find((x) => x.id === el.dataset.gEdit); if (!g) return;
       openName({
-        title: 'Renombrar grupo', label: 'Nombre del grupo', value: g.name,
+        title: 'Renombrar filtro', label: 'Nombre del filtro', value: g.name,
         onSubmit: async (name) => {
-          if (attrGroups.some((x) => x.id !== g.id && norm(x.name) === norm(name))) return 'Ya hay un grupo con ese nombre.';
+          if (groupsOf(g.category_id).some((x) => x.id !== g.id && norm(x.name) === norm(name))) return 'Ya hay un filtro con ese nombre en esta categoría.';
           const { error } = await sb.from('attribute_groups').update({ name }).eq('id', g.id);
           if (error) return 'No se pudo guardar. Intentá de nuevo.';
           await refreshAttrs(); return '';
@@ -893,7 +919,7 @@
       openName({
         title: 'Renombrar opción', label: `Nombre de la opción (${f.g.name})`, value: f.v.name,
         onSubmit: async (name) => {
-          if (f.g.values.some((x) => x.id !== f.v.id && norm(x.name) === norm(name))) return 'Esa opción ya está en el grupo.';
+          if (f.g.values.some((x) => x.id !== f.v.id && norm(x.name) === norm(name))) return 'Esa opción ya está en el filtro.';
           const { error } = await sb.from('attribute_values').update({ name }).eq('id', f.v.id);
           if (error) return 'No se pudo guardar. Intentá de nuevo.';
           await refreshAttrs(); return '';
@@ -905,7 +931,7 @@
       const f = findValue(el.dataset.vDel); if (!f) return;
       const n = valueUses(f.g, f.v);
       if (n > 0) { window.alert(`No se puede quitar "${f.v.name}" porque la usan ${n} ${n === 1 ? 'producto' : 'productos'}. Destildala en esos productos y volvé a intentar.`); return; }
-      if (!window.confirm(`¿Quitar la opción "${f.v.name}" del grupo ${f.g.name}?`)) return;
+      if (!window.confirm(`¿Quitar la opción "${f.v.name}" del filtro ${f.g.name}?`)) return;
       const { error } = await sb.from('attribute_values').delete().eq('id', f.v.id);
       if (error) { window.alert('No se pudo quitar. Intentá de nuevo.'); return; }
       await refreshAttrs();
@@ -915,17 +941,17 @@
       const g = attrGroups.find((x) => x.id === el.dataset.gDel); if (!g) return;
       const n = new Set(products.filter((p) => g.values.some((v) => ((p.attrs || {})[g.id] || []).includes(v.id))).map((p) => p.id)).size;
       if (n > 0) { window.alert(`No se puede eliminar "${g.name}" porque ${n} ${n === 1 ? 'producto usa' : 'productos usan'} sus opciones. Destildalas en esos productos y volvé a intentar.`); return; }
-      if (!window.confirm(`¿Eliminar el grupo "${g.name}" con todas sus opciones? Esta acción no se puede deshacer.`)) return;
+      if (!window.confirm(`¿Eliminar el filtro "${g.name}" con todas sus opciones? Esta acción no se puede deshacer.`)) return;
       const { error } = await sb.from('attribute_groups').delete().eq('id', g.id);
       if (error) { window.alert('No se pudo eliminar. Intentá de nuevo.'); return; }
       await refreshAttrs();
     }
   });
-  grpList.addEventListener('keydown', (e) => {
+  catList.addEventListener('keydown', (e) => {
     const inp = e.target.closest('[data-v-input]');
     if (inp && e.key === 'Enter') { e.preventDefault(); addValue(inp.dataset.vInput); }
   });
-  grpList.addEventListener('input', (e) => {
+  catList.addEventListener('input', (e) => {
     const inp = e.target.closest('[data-v-input]');
     if (inp) { const er = $(`[data-v-err="${CSS.escape(inp.dataset.vInput)}"]`); if (er) er.textContent = ''; }
   });
