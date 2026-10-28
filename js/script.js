@@ -675,6 +675,26 @@
   /* ==========================================================
      CONFIRMACIÓN DEL PEDIDO
      ========================================================== */
+  /* Mensaje con el detalle del pedido, listo para que el cliente lo mande por WhatsApp al local */
+  function orderWhatsAppText(order) {
+    const lines = [
+      `Hola ${cfg.business.name}, hice un pedido en la web.`,
+      '',
+      `*Pedido ${order.number}*`,
+      ...order.items.map((i) => `• ${i.name}${i.color ? ` (${i.color})` : ''} × ${i.quantity} — ${fmt(i.subtotal)}`),
+      `*Total: ${fmt(order.total)}*`,
+      '',
+      `Entrega: ${order.delivery.label}`,
+    ];
+    if (order.delivery.address) lines.push(`Dirección: ${order.delivery.address}`);
+    if (order.paymentMethod) lines.push(`Medio de pago: ${order.paymentMethod.label}`);
+    lines.push(`Nombre: ${order.customer.name}`, `Teléfono: ${order.customer.phone}`);
+    const note = order.customerNotes !== undefined ? order.customerNotes : '';
+    if (note) lines.push(`Observaciones: ${note}`);
+    if (order.paymentMethod && order.paymentMethod.id === 'transferencia') lines.push('', 'Te mando el comprobante de la transferencia por acá.');
+    return lines.join('\n');
+  }
+
   function initOrderDone() {
     const root = $('#order-root');
     const order = Orders.last();
@@ -700,6 +720,11 @@
       </div>
       ${order.demo && cfg.demoMode ? `<div class="notice notice-warn" role="note"><p><strong>Modo demostración.</strong> Este pedido se guardó solo en este dispositivo: Rincón de Sueño todavía no lo recibe.</p></div>` : ''}
       ${payNote ? `<div class="notice" role="status"><p>${esc(payNote)}</p></div>` : ''}
+      <section class="card wa-send" aria-labelledby="t-wa">
+        <h2 id="t-wa">Mandanos tu pedido por WhatsApp</h2>
+        <p>Tocá el botón y se abre WhatsApp con el detalle de tu pedido ya escrito. Solo falta enviarlo para que el local lo vea y te confirme${order.paymentMethod && order.paymentMethod.id === 'transferencia' ? '. Si pagás por transferencia, adjuntá ahí el comprobante' : ''}.</p>
+        <a class="btn btn-wa btn-lg btn-block" id="wa-send" href="${esc(waLink(orderWhatsAppText(order)))}" target="_blank" rel="noopener"><svg class="ico" aria-hidden="true"><use href="#i-chat"/></svg>Enviar mi pedido por WhatsApp<span class="sr-only"> (se abre en una pestaña nueva)</span></a>
+      </section>
       <div class="done-grid">
         <section class="card" aria-labelledby="t-order">
           <h2 id="t-order">Tu pedido</h2>

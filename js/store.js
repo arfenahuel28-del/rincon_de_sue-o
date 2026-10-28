@@ -306,6 +306,7 @@
         customer: { name: form.name, phone: form.phone, email: form.email },
         delivery: { method: method.id, label: method.label, address: method.needsAddress ? form.address : '', notes },
         items,
+        customerNotes: form.notes || '',
         paymentMethod: pay ? { id: pay.id, label: pay.label, note: pay.note } : null,
         total: items.reduce((s, i) => s + i.subtotal, 0),
       };
