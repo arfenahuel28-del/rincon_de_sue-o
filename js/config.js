@@ -45,7 +45,7 @@ window.BLACK_CONFIG = {
      (por ejemplo el alias de la transferencia). */
   paymentMethods: [
     { id: 'efectivo', label: 'Efectivo', note: 'Pagás en el local al retirar tu pedido, o al recibirlo si coordinamos el envío.' },
-    { id: 'transferencia', label: 'Transferencia', note: 'Alias: REEMPLAZAR · Titular: REEMPLAZAR. Después de transferir, mandanos el comprobante por WhatsApp con tu número de pedido.' },
+    { id: 'transferencia', label: 'Transferencia', note: 'Alias: rincondesueno.rio4 · Titular: Leonardo Nahuel Arfenoni. Después de transferir, mandanos el comprobante por WhatsApp con tu número de pedido.' },
     /* "online: true" → cuando el pago con Mercado Pago está activado (ver abajo), estas dos se pagan ahora, en la página segura
        de Mercado Pago. Si no está activado, se muestra "note" y se paga en el local. */
     { id: 'debito', label: 'Tarjeta de débito', online: true, note: 'Pagás con tu tarjeta en el local al retirar tu pedido.', noteOnline: 'Al confirmar el pedido pagás ahora con tu tarjeta de débito en la página segura de Mercado Pago.' },
