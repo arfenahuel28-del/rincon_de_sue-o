@@ -39,7 +39,7 @@ window.BLACK_CONFIG = {
 
   /* Para cobrar con tarjeta online (Mercado Pago): primero dejá andando las funciones de Supabase (pasos en
      supabase/MERCADOPAGO.md) y recién después cambiá 'none' por 'mercadopago'. Mientras diga 'none', la tarjeta se paga en el local. */
-  payments: { provider: 'none' },
+  payments: { provider: 'mercadopago' },
 
   /* Medios de pago que ve el cliente al hacer el pedido. Cambiá el texto de "note" para dar los datos
      (por ejemplo el alias de la transferencia). */
