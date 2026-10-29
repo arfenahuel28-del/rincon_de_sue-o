@@ -307,7 +307,7 @@
         delivery: { method: method.id, label: method.label, address: method.needsAddress ? form.address : '', notes },
         items,
         customerNotes: form.notes || '',
-        paymentMethod: pay ? { id: pay.id, label: pay.label, note: pay.note } : null,
+        paymentMethod: pay ? (Payments.isOnlineMethod(pay) ? { id: pay.id, label: pay.label, note: pay.noteOnline || pay.note, online: true } : { id: pay.id, label: pay.label, note: pay.note }) : null,
         total: items.reduce((s, i) => s + i.subtotal, 0),
       };
     },
@@ -353,10 +353,16 @@
 
   /* ---------- Pagos (sin integración real todavía) ---------- */
   const Payments = {
-    enabled() { return cfg.payments.provider === 'mercadopago' && !!cfg.endpoints.paymentPreference; },
+    /* Activo cuando payments.provider es 'mercadopago' (la función se busca sola en tu Supabase) */
+    enabled() { return cfg.payments.provider === 'mercadopago' && (SB_ON || !!cfg.endpoints.paymentPreference); },
+    /* ¿Este medio de pago se cobra online (Mercado Pago)? */
+    isOnlineMethod(m) { return this.enabled() && !!m && m.online === true; },
     async begin(order) {
-      if (!this.enabled()) return { redirected: false };
-      const res = await fetch(cfg.endpoints.paymentPreference, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderNumber: order.number }) });
+      if (!this.enabled() || !order || !order.paymentMethod || !order.paymentMethod.online) return { redirected: false };
+      /* Las funciones de Supabase piden la clave pública (anon) en la cabecera */
+      const auth = SB_ON ? { apikey: sbCfg.anonKey, Authorization: 'Bearer ' + sbCfg.anonKey } : {};
+      const url = cfg.endpoints.paymentPreference || `${sbCfg.url.replace(/\/$/, '')}/functions/v1/mp-create-preference`;
+      const res = await fetch(url, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, auth), body: JSON.stringify({ orderNumber: order.number, email: order.customer.email, method: order.paymentMethod.id }) });
       if (!res.ok) throw new Error('payment');
       const data = await res.json();
       if (!data.checkoutUrl) throw new Error('payment');

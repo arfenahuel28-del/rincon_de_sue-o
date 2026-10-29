@@ -6,14 +6,14 @@ window.BLACK_CONFIG = {
   business: {
     name: 'Rincón de Sueño Blanquería',
     // ⚠️ REEMPLAZAR: datos de ejemplo. Cargá los reales antes de publicar.
-    phone: '+54 9 358 4158832',                  // REEMPLAZAR
-    whatsapp: '5493584158832',                    // REEMPLAZAR (formato internacional, sin + ni espacios)
-    instagram: 'rincondesueno_',        // REEMPLAZAR
-    address: 'Chiclana 238',       // REEMPLAZAR
-    city: 'Rio Cuarto, Cordoba',       // REEMPLAZAR
+    phone: '+54 9 000 000 0000',                  // REEMPLAZAR
+    whatsapp: '5490000000000',                    // REEMPLAZAR (formato internacional, sin + ni espacios)
+    instagram: 'rincondesueno.blanqueria',        // REEMPLAZAR
+    address: 'Calle y número (REEMPLAZAR)',       // REEMPLAZAR
+    city: 'Ciudad, Provincia (REEMPLAZAR)',       // REEMPLAZAR
     hours: [                                      // REEMPLAZAR
-      ['Lunes a viernes', '9:30 – 13:00 y 16:30 – 20:00'],
-      ['Sábados', '9:30 – 13:00'],
+      ['Lunes a viernes', '9:00 – 13:00 y 16:30 – 20:00'],
+      ['Sábados', '9:00 – 13:00'],
     ],
   },
 
@@ -37,15 +37,19 @@ window.BLACK_CONFIG = {
     paymentPreference: '',  // POST → { orderNumber } → { checkoutUrl } (Mercado Pago)
   },
 
+  /* Para cobrar con tarjeta online (Mercado Pago): primero dejá andando las funciones de Supabase (pasos en
+     supabase/MERCADOPAGO.md) y recién después cambiá 'none' por 'mercadopago'. Mientras diga 'none', la tarjeta se paga en el local. */
   payments: { provider: 'none' },
 
   /* Medios de pago que ve el cliente al hacer el pedido. Cambiá el texto de "note" para dar los datos
      (por ejemplo el alias de la transferencia). */
   paymentMethods: [
     { id: 'efectivo', label: 'Efectivo', note: 'Pagás en el local al retirar tu pedido, o al recibirlo si coordinamos el envío.' },
-    { id: 'transferencia', label: 'Transferencia', note: 'Alias: rincondesueno.rio4 · Titular: Leonardo Nahuel Arfenoni. Después de transferir, mandanos el comprobante por WhatsApp con tu número de pedido.' },
-    { id: 'debito', label: 'Tarjeta de débito', note: 'Pagás con tu tarjeta en el local al retirar tu pedido.' },
-    { id: 'credito', label: 'Tarjeta de crédito', note: 'Pagás con tu tarjeta en el local al retirar tu pedido. Consultá las cuotas disponibles.' },
+    { id: 'transferencia', label: 'Transferencia', note: 'Alias: REEMPLAZAR · Titular: REEMPLAZAR. Después de transferir, mandanos el comprobante por WhatsApp con tu número de pedido.' },
+    /* "online: true" → cuando el pago con Mercado Pago está activado (ver abajo), estas dos se pagan ahora, en la página segura
+       de Mercado Pago. Si no está activado, se muestra "note" y se paga en el local. */
+    { id: 'debito', label: 'Tarjeta de débito', online: true, note: 'Pagás con tu tarjeta en el local al retirar tu pedido.', noteOnline: 'Al confirmar el pedido pagás ahora con tu tarjeta de débito en la página segura de Mercado Pago.' },
+    { id: 'credito', label: 'Tarjeta de crédito', online: true, note: 'Pagás con tu tarjeta en el local al retirar tu pedido. Consultá las cuotas disponibles.', noteOnline: 'Al confirmar el pedido pagás ahora con tu tarjeta de crédito en la página segura de Mercado Pago, con las cuotas que ofrezca tu tarjeta.' },
   ],
 
   delivery: [

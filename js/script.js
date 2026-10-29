@@ -564,7 +564,8 @@
     /* Medios de pago desde la configuración (si hay pago online activo, se paga ahí) */
     const payBox = $('#payment-options');
     const payNote = $('#payment-note');
-    const methods = Payments.enabled() ? [] : (cfg.paymentMethods || []);
+    const methods = cfg.paymentMethods || [];
+    const payText = (m) => (Payments.isOnlineMethod(m) && m.noteOnline ? m.noteOnline : m.note);
     const selectedPayment = () => (form.querySelector('input[name="payment"]:checked') || {}).value || '';
     if (methods.length) {
       payBox.innerHTML = methods.map((m, i) => `
@@ -572,7 +573,7 @@
           <input type="radio" name="payment" value="${esc(m.id)}"${i === 0 ? ' checked' : ''}>
           <span class="choice-box"><strong>${esc(m.label)}</strong></span>
         </label>`).join('');
-      const showPayNote = () => { const m = methods.find((x) => x.id === selectedPayment()); payNote.textContent = m ? m.note : ''; };
+      const showPayNote = () => { const m = methods.find((x) => x.id === selectedPayment()); payNote.textContent = m ? payText(m) : ''; };
       payBox.addEventListener('change', showPayNote);
       showPayNote();
     } else {
@@ -663,7 +664,8 @@
         return;
       }
       try {
-        const pay = await Payments.begin(order);
+        const chosen = methods.find((x) => x.id === selectedPayment());
+        const pay = Payments.isOnlineMethod(chosen) ? await Payments.begin(order) : { redirected: false };
         if (pay.redirected) return;
         location.href = 'pedido.html';
       } catch (err) {
@@ -706,7 +708,8 @@
     const mp = params.get('status') || params.get('collection_status');
     let payNote = '';
     if (params.get('pago') === 'error') payNote = 'Recibimos tu pedido, pero no pudimos iniciar el pago online. El local se va a comunicar con vos para coordinarlo.';
-    else if (mp === 'rejected') payNote = 'El pago fue rechazado. Tu pedido sigue registrado: contactanos para resolverlo.';
+    else if (mp === 'rejected' || mp === 'failure') payNote = 'El pago fue rechazado. Tu pedido sigue registrado: podés intentar pagar de nuevo o contactarnos para resolverlo.';
+    else if (mp === 'approved') payNote = 'Mercado Pago nos informó que tu pago fue aprobado. ¡Gracias! El local lo confirma en breve.';
     else if (mp === 'pending' || mp === 'in_process') payNote = 'Tu pago está en proceso. Te avisaremos cuando se acredite.';
 
     const when = new Date(order.createdAt).toLocaleString('es-AR', { dateStyle: 'long', timeStyle: 'short' });
@@ -720,6 +723,13 @@
       </div>
       ${order.demo && cfg.demoMode ? `<div class="notice notice-warn" role="note"><p><strong>Modo demostración.</strong> Este pedido se guardó solo en este dispositivo: Rincón de Sueño todavía no lo recibe.</p></div>` : ''}
       ${payNote ? `<div class="notice" role="status"><p>${esc(payNote)}</p></div>` : ''}
+      ${order.paymentMethod && order.paymentMethod.online && Payments.enabled() && mp !== 'approved' && !(order.payment && order.payment.status === 'aprobado') ? `
+      <section class="card pay-now" aria-labelledby="t-pay">
+        <h2 id="t-pay">Pagá tu pedido con tarjeta</h2>
+        <p>Pagás en la página segura de Mercado Pago. Si ya pagaste, no hace falta que hagas nada más.</p>
+        <button class="btn btn-red btn-lg btn-block" type="button" id="pay-now">Pagar con tarjeta</button>
+        <p class="form-error" id="pay-now-error" role="alert"></p>
+      </section>` : ''}
       <section class="card wa-send" aria-labelledby="t-wa">
         <h2 id="t-wa">Mandanos tu pedido por WhatsApp</h2>
         <p>Tocá el botón y se abre WhatsApp con el detalle de tu pedido ya escrito. Solo falta enviarlo para que el local lo vea y te confirme${order.paymentMethod && order.paymentMethod.id === 'transferencia' ? '. Si pagás por transferencia, adjuntá ahí el comprobante' : ''}.</p>
@@ -747,6 +757,16 @@
         </section>
       </div>
       <div class="actions-row"><a class="btn btn-red btn-lg" href="productos.html">Seguir comprando</a></div>`;
+
+    const payBtn = $('#pay-now');
+    if (payBtn) payBtn.addEventListener('click', async () => {
+      payBtn.disabled = true;
+      $('#pay-now-error').textContent = '';
+      try { await Payments.begin(order); } catch (err) {
+        $('#pay-now-error').textContent = 'No pudimos abrir el pago. Intentá de nuevo en un momento o escribinos por WhatsApp.';
+        payBtn.disabled = false;
+      }
+    });
   }
 
   /* ==========================================================
