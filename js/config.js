@@ -6,14 +6,14 @@ window.BLACK_CONFIG = {
   business: {
     name: 'Rincón de Sueño Blanquería',
     // ⚠️ REEMPLAZAR: datos de ejemplo. Cargá los reales antes de publicar.
-    phone: '+54 9 000 000 0000',                  // REEMPLAZAR
-    whatsapp: '5490000000000',                    // REEMPLAZAR (formato internacional, sin + ni espacios)
-    instagram: 'rincondesueno.blanqueria',        // REEMPLAZAR
-    address: 'Calle y número (REEMPLAZAR)',       // REEMPLAZAR
-    city: 'Ciudad, Provincia (REEMPLAZAR)',       // REEMPLAZAR
+    phone: '+54 9 358 4158832',                  // REEMPLAZAR
+    whatsapp: '5493584158832',                    // REEMPLAZAR (formato internacional, sin + ni espacios)
+    instagram: 'rincondesueno_',        // REEMPLAZAR
+    address: 'Chiclana 169',       // REEMPLAZAR
+    city: 'Rio Cuarto, Cordoba',       // REEMPLAZAR
     hours: [                                      // REEMPLAZAR
-      ['Lunes a viernes', '9:00 – 13:00 y 16:30 – 20:00'],
-      ['Sábados', '9:00 – 13:00'],
+      ['Lunes a viernes', '9:30 – 13:00 y 16:30 – 20:00'],
+      ['Sábados', '9:30 – 13:00'],
     ],
   },
 
